@@ -10,6 +10,7 @@ use raft::storage::MemStorage;
 use raft::{prelude::*, StateRole};
 use std::collections::hash_map::RandomState;
 use std::time::{ SystemTime, UNIX_EPOCH };
+use std::process::exit;
 
 
 use std::fmt::{ self, Debug, Formatter };
@@ -25,9 +26,15 @@ extern crate env_logger;
 fn main() {
     env_logger::init();
     let args: Vec<String> = env::args().collect();
+    if args.len()<2 {
+        eprintln!("Problem parsing arguments: You need to specify how many nodes should be in cluster.  ",);
+        eprintln!("Example : Cargo run 'num_of_nodes'");
+
+        exit(1);
+    }
     let num_of_nodes: u64 = args[1].parse().unwrap();
-    let initial_leader_node: u64 = args[2].parse().unwrap();;
-    println!("{:?}", num_of_nodes);
+    //let initial_leader_node: u64 = args[2].parse().unwrap();;
+    println!("Starting cluster with {} nodes...", num_of_nodes);
 
     let tick_interval = 10;
 
@@ -115,7 +122,9 @@ fn main() {
     //add new block every 20 seconds
     let mut block_index = 1;
     loop{
-        println!("Adding new block {}",block_index);
+        println!("----------------------");
+        println!("Adding new block - {}",block_index);
+        println!("----------------------");
         let new_block = Block::new(block_index, now(), vec![0; 32]);
         let (proposal, rx) = Proposal::normal(new_block);
         proposals.lock().unwrap().push_back(proposal);
@@ -329,7 +338,13 @@ fn on_ready(
                 let block: Block = bincode::deserialize(&entry.get_data()).unwrap();
                 let block_index = block.index;
                 blockchain.add_block(block);
-                println!("Node {} added new block at index {}",raft.raft.id, block_index);
+                let node_role;
+                if raft.raft.state == StateRole::Leader{
+                    node_role = String::from("Leader");
+                }else{
+                    node_role = String::from("Follower");
+                }
+                println!("Node {} - {} added new block at index {}",raft.raft.id, node_role,block_index);
             }
             if raft.raft.state == StateRole::Leader {
                 // The leader should response to the clients, tell them if their proposals
@@ -370,22 +385,6 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
             break;
         }
         thread::sleep(Duration::from_millis(100));
-    }
-}
-
-fn add_all_followers(proposals: &Mutex<VecDeque<Proposal>>) {
-    for i in 2..6u64 {
-        let mut conf_change = ConfChange::default();
-        conf_change.set_node_id(i);
-        conf_change.set_change_type(ConfChangeType::AddNode);
-        loop {
-            let (proposal, rx) = Proposal::conf_change(&conf_change);
-            proposals.lock().unwrap().push_back(proposal);
-            if rx.recv().unwrap() {
-                break;
-            }
-            thread::sleep(Duration::from_millis(100));
-        }
     }
 }
 
