@@ -128,7 +128,7 @@ fn main() {
         println!("----------------------");
         println!("Adding new block - {}",block_index);
         println!("----------------------");
-        let new_block = Block::new(block_index, now(), vec![0; 32]);
+        let new_block = Block::new(block_index, 1,1,0,"1".to_string(),now(), vec![0; 32], vec![0; 32], vec![0; 64]);
         let (proposal, rx) = Proposal::normal(new_block);
         proposals.lock().unwrap().push_back(proposal);
         // After we got a response from `rx`, we can assume that block was inserted successfully to the blockchain
@@ -339,7 +339,7 @@ fn on_ready(
                 // For normal proposals, extract block from message
                 // insert block into the blockchain
                 let block: Block = bincode::deserialize(&entry.get_data()).unwrap();
-                let block_index = block.index;
+                let block_index = block.block_id;
                 blockchain.add_block(block);
                 let node_role;
                 if raft.raft.state == StateRole::Leader{
