@@ -50,7 +50,8 @@ fn main() {
         rx_vec.push(rx);
     }
 
-    let proposals = Arc::new(Mutex::new(VecDeque::<Proposal>::new()));
+    //Que for storing blockchain updates requests (e.g adding new block)
+    let blockchain_updates = Arc::new(Mutex::new(VecDeque::<Proposal>::new()));
 
 
     //store handle for each thread
@@ -70,7 +71,7 @@ fn main() {
             _ => Node::create_raft_follower(current_node_id,rx, mailboxes),
         };
 
-        let proposals = Arc::clone(&proposals);
+        let proposals = Arc::clone(&blockchain_updates);
 
         let mut t = Instant::now();
 
@@ -119,7 +120,7 @@ fn main() {
     }
 
     for i in 2..num_of_nodes+1u64 {
-        add_new_node(proposals.as_ref(),i);
+        add_new_node(blockchain_updates.as_ref(),i);
     }
 
     //add new block every 20 seconds
@@ -130,7 +131,7 @@ fn main() {
         println!("----------------------");
         let new_block = Block::new(block_index, 1,1,0,"1".to_string(),now(), vec![0; 32], vec![0; 32], vec![0; 64]);
         let (proposal, rx) = Proposal::normal(new_block);
-        proposals.lock().unwrap().push_back(proposal);
+        blockchain_updates.lock().unwrap().push_back(proposal);
         // After we got a response from `rx`, we can assume that block was inserted successfully to the blockchain
         rx.recv().unwrap();
         block_index+=1;
