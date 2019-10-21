@@ -14,9 +14,9 @@ use crate::proposal::Proposal;
 pub struct Node {
     // None if the raft is not initialized.
     pub id: u64,
-    pub raft: Option<RawNode<MemStorage>>,
-    pub my_mailbox: Receiver<Message>,
-    pub mailboxes: HashMap<u64, Sender<Message>>,
+    pub raw_node: Option<RawNode<MemStorage>>,
+    pub my_mailbox: Receiver<Update>,
+    pub mailboxes: HashMap<u64, Sender<Update>>,
     // Key-value pairs after applied. `MemStorage` only contains raft logs,
     // so we need an additional storage engine.
     pub blockchain: Blockchain,
@@ -26,8 +26,8 @@ impl Node {
     // Create a raft leader only with itself in its configuration.
     pub fn create_raft_leader(
         id: u64,
-        my_mailbox: Receiver<Message>,
-        mailboxes: HashMap<u64, Sender<Message>>,
+        my_mailbox: Receiver<Update>,
+        mailboxes: HashMap<u64, Sender<Update>>,
     ) -> Self {
         let mut cfg = Config {
             election_tick: 10,
@@ -41,7 +41,7 @@ impl Node {
         let raft = Some(RawNode::new(&cfg, storage).unwrap());
         Node {
             id,
-            raft,
+            raw_node: raft,
             my_mailbox,
             mailboxes,
             blockchain: Blockchain::new(),
@@ -51,12 +51,12 @@ impl Node {
     // Create a raft follower.
     pub fn create_raft_follower(
         id: u64,
-        my_mailbox: Receiver<Message>,
-        mailboxes: HashMap<u64, Sender<Message>>,
+        my_mailbox: Receiver<Update>,
+        mailboxes: HashMap<u64, Sender<Update>>,
     ) -> Self {
         Node {
             id,
-            raft: None,
+            raw_node: None,
             my_mailbox,
             mailboxes,
             blockchain: Blockchain::new(),
@@ -64,14 +64,14 @@ impl Node {
     }
     // Step a raft message, initialize the raft if need.
     pub fn step(&mut self, msg: Message) {
-        if self.raft.is_none() {
+        if self.raw_node.is_none() {
             if is_initial_msg(&msg) {
                 self.initialize_raft_from_message(&msg);
             } else {
                 return;
             }
         }
-        let raft = self.raft.as_mut().unwrap();
+        let raft = self.raw_node.as_mut().unwrap();
         let _ = raft.step(msg);
     }
 
@@ -87,7 +87,7 @@ impl Node {
             ..Default::default()
         };
         let storage = MemStorage::new();
-        self.raft = Some(RawNode::new(&cfg, storage).unwrap());
+        self.raw_node = Some(RawNode::new(&cfg, storage).unwrap());
     }
 
     pub fn start_node(&mut self) {
@@ -95,16 +95,17 @@ impl Node {
     }
 
     pub fn propose(&mut self, proposal: &mut Proposal) {
-        let raw_node = match self.raft {
+        let raw_node = match self.raw_node {
             Some(ref mut r) => r,
             // When Node::raft is `None` it means the the node was not initialized
             _ => panic!("Raft is not innitialized"),
         };
 
         let last_index1 = raw_node.raft.raft_log.last_index() + 1;
-        if let Some(ref block) = proposal.normal {
+        if let Some( ref block) = proposal.block {
             //convert Block struct to bytes
             let data = bincode::serialize(&block).unwrap();
+            //let new_block_id = block.block_id;
             let _ = raw_node.propose(vec![], data);
         } else if let Some(ref cc) = proposal.conf_change {
             let _ = raw_node.propose_conf_change(vec![], cc.clone());
@@ -123,7 +124,7 @@ impl Node {
         &mut self,
         proposals: &Mutex<VecDeque<Proposal>>,
     ) {
-        let raw_node = match self.raft {
+        let raw_node = match self.raw_node {
             Some(ref mut r) => r,
             // When Node::raft is `None` it means the the node was not initialized
             _ => panic!("Raft is not innitialized"),
@@ -156,7 +157,7 @@ impl Node {
         // Send out the messages come from the node.
         for msg in ready.messages.drain(..) {
             let to = msg.get_to();
-            if self.mailboxes[&to].send(msg).is_err() {
+            if self.mailboxes[&to].send(Update::RaftMessage(msg)).is_err() {
                 warn!("send raft message to {} fail, let Raft retry it", to);
                 print!("Sending messages");
             }
@@ -214,6 +215,16 @@ impl Node {
         // Call `RawNode::advance` interface to update position flags in the raft.
         raw_node.advance(ready);
     }
+
+    pub fn on_block_new(&mut self, block: Block) {
+
+    }
+}
+
+#[derive(Debug)]
+pub enum Update {
+    BlockNew(Block),
+    RaftMessage(Message),
 }
 
 // The message can be used to initialize a raft node or not.

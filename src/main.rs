@@ -61,7 +61,7 @@ fn main() {
     for (i, rx) in rx_vec.into_iter().enumerate() {
 
         //"mailboxes" for each node - [{node_id,tx},{node_id,tx}...]
-        let mailboxes: HashMap<u64, mpsc::Sender<Message<>>> = (1..num_of_nodes+1u64).zip(tx_vec.iter().cloned()).collect();
+        let mailboxes: HashMap<u64, mpsc::Sender<Update<>>> = (1..num_of_nodes+1u64).zip(tx_vec.iter().cloned()).collect();
         println!("Mailboxes: {:?}",mailboxes);
 
         let mut node = match i {
@@ -78,15 +78,20 @@ fn main() {
 
 
         let handle = thread::spawn(move ||
+            //Forever loop to drive the Raft
             loop {
                 // Step raft messages.
                 match node.my_mailbox.try_recv() {
-                    Ok(msg) => node.step(msg),
                     Err(TryRecvError::Empty) => (),
                     Err(TryRecvError::Disconnected) => return,
+                    Ok(update) => {
+                        debug!("Update: {:?}", update);
+                        handle_update(&mut node, update);
+                    }
+
                 }
                 thread::sleep(Duration::from_millis(10));
-                let raft = match node.raft {
+                let raft = match node.raw_node {
                     Some(ref mut r) => r,
                     // When Node::raft is `None` it means the the node was not initialized
                     _ => continue,
@@ -101,6 +106,8 @@ fn main() {
 
 
                 // Let the leader pick pending proposals from the global queue.
+                //TODO: Propose new block only when the block is valid
+                //TODO: Make sure that new block block will be proposed after previus block was finally commited/rejecte by network
                 if raft.raft.state == StateRole::Leader {
                     // Handle new proposals.
                     let mut proposals = proposals.lock().unwrap();
@@ -109,7 +116,7 @@ fn main() {
                     }
                 }
 
-                let x = match node.raft {
+                let x = match node.raw_node {
                     Some(ref mut r) => r,
                     // When Node::raft is `None` it means the the node was not initialized
                     _ => continue,
@@ -148,7 +155,7 @@ fn main() {
         println!("Adding new block - {}",block_index);
         println!("----------------------");
         let new_block = Block::new(block_index, 1,1,0,"1".to_string(),now(), vec![0; 32], vec![0; 32], vec![0; 64]);
-        let (proposal, rx) = Proposal::normal(new_block);
+        let (proposal, rx) = Proposal::new_block(new_block);
         blockchain_updates.lock().unwrap().push_back(proposal);
         // After we got a response from `rx`, we can assume that block was inserted successfully to the blockchain
         rx.recv().unwrap();
@@ -160,6 +167,17 @@ fn main() {
         th.join().unwrap();
     }
 
+}
+
+fn handle_update(node: &mut Node, update: Update) -> bool {
+    match update {
+        Update::BlockNew(block) => node.on_block_new(block),
+        Update::RaftMessage(message) => node.step(message),
+        //Update::Shutdown => return false,
+
+        update => warn!("Unhandled update: {:?}", update),
+    }
+    true
 }
 
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
