@@ -9,6 +9,9 @@ use raft::{prelude::*, StateRole};
 pub use crate::blockchain::block::Block;
 pub use crate::blockchain::*;
 use crate::proposal::Proposal;
+use crate::RaftPeer;
+use protobuf::{self, Message as ProtobufMessage};
+
 
 
 pub struct Node {
@@ -16,7 +19,7 @@ pub struct Node {
     pub id: u64,
     pub raw_node: Option<RawNode<MemStorage>>,
     pub my_mailbox: Receiver<Update>,
-    pub mailboxes: HashMap<u64, Sender<Update>>,
+    pub mailboxes: HashMap<u64, RaftPeer>,
     pub blockchain: Blockchain,
 }
 
@@ -25,7 +28,7 @@ impl Node {
     pub fn create_raft_leader(
         id: u64,
         my_mailbox: Receiver<Update>,
-        mailboxes: HashMap<u64, Sender<Update>>,
+        mailboxes: HashMap<u64, RaftPeer>,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut cfg = Config {
@@ -51,7 +54,7 @@ impl Node {
     pub fn create_raft_follower(
         id: u64,
         my_mailbox: Receiver<Update>,
-        mailboxes: HashMap<u64, Sender<Update>>,
+        mailboxes: HashMap<u64, RaftPeer>,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         Node {
@@ -105,7 +108,7 @@ impl Node {
         let last_index1 = raw_node.raft.raft_log.last_index() + 1;
         if let Some( ref block) = proposal.block {
             //convert Block struct to bytes
-            let data = bincode::serialize(&block).unwrap();
+            let data = bincode::serialize(&block.block_id).unwrap();
             //let new_block_id = block.block_id;
             let _ = raw_node.propose(vec![], data);
         } else if let Some(ref cc) = proposal.conf_change {
@@ -147,7 +150,7 @@ impl Node {
         }
 
         // Apply the snapshot. It's necessary because in `RawNode::advance` we stabilize the snapshot.
-        if *ready.snapshot() != Snapshot::new_() {
+        if *ready.snapshot() != Snapshot::default() {
             let s = ready.snapshot().clone();
             if let Err(e) = store.wl().apply_snapshot(s) {
                 error!("apply snapshot fail: {:?}, need to retry or panic", e);
@@ -157,11 +160,11 @@ impl Node {
 
         // Send out the messages come from the node.
         for msg in ready.messages.drain(..) {
+            //print!("Sending message:{:?}",msg);
             let to = msg.get_to();
-            if self.mailboxes[&to].send(Update::RaftMessage(msg)).is_err() {
-                warn!("send raft message to {} fail, let Raft retry it", to);
-                print!("Sending messages");
-            }
+            //let message_to_send = Update::RaftMessage(msg);
+            let data = msg.write_to_bytes().unwrap();
+            self.mailboxes[&to].socket.send(data,0).unwrap();
         }
 
         // Apply all committed proposals.
@@ -173,8 +176,8 @@ impl Node {
                 }
                 if let EntryType::EntryConfChange = entry.get_entry_type() {
                     // Handle conf change messages
-                    let mut cc = ConfChange::new_();
-                    ProstMsg::merge(&mut cc, entry.get_data()).unwrap();
+                    let mut cc = ConfChange::default();
+                    cc.merge_from_bytes(&entry.data).unwrap();
                     let node_id = cc.get_node_id();
                     match cc.get_change_type() {
                         ConfChangeType::AddNode => raw_node.raft.add_node(node_id).unwrap(),
@@ -189,16 +192,16 @@ impl Node {
                 }  else {
                     // For normal proposals, extract block from message
                     // insert block into the blockchain
-                    let block: Block = bincode::deserialize(&entry.get_data()).unwrap();
-                    let block_index = block.block_id;
-                    self.blockchain.add_block(block);
+                    let block_id: u64 = bincode::deserialize(&entry.get_data()).unwrap();
+                    //let block_index = block.block_id;
+                    //self.blockchain.add_block(block);
                     let node_role;
                     if raw_node.raft.state == StateRole::Leader{
                         node_role = String::from("Leader");
                     }else{
                         node_role = String::from("Follower");
                     }
-                    println!("Node {} - {} added new block at index {}",raw_node.raft.id, node_role,block_index);
+                    println!("Node {} - {} added new block at index {}",raw_node.raft.id, node_role,block_id);
                 }
                 if raw_node.raft.state == StateRole::Leader {
                     // The leader should response to the clients, tell them if their proposals
@@ -221,7 +224,6 @@ impl Node {
 
     }
 }
-
 #[derive(Debug)]
 pub enum Update {
     BlockNew(Block),
