@@ -75,12 +75,15 @@ fn main() {
 
     //Que for storing blockchain updates requests (e.g adding new block)
     let proposals_global = Arc::new(Mutex::new(VecDeque::<Proposal>::new()));
+    let conf_change_proposals_global = Arc::new(Mutex::new(VecDeque::<Proposal>::new()));
 
 
     let proposals = Arc::clone(&proposals_global);
+    let conf_change_proposals = Arc::clone(&conf_change_proposals_global);
 
     let mut t = Instant::now();
     let mut leader_stop_timer = Instant::now();
+    let mut new_block_timer = Instant::now();
 
 
     //Create a channel for communication between main thread and zeromq receiver thread
@@ -108,7 +111,7 @@ fn main() {
 
     let mut node = match is_leader {
         // Create node 1 as leader
-        1 => Node::create_raft_leader(this_peer_port, zeromq_reciever, peers),
+        1 => Node::create_raft_leader(this_peer_port, zeromq_reciever, peers,peer_list.clone()),
         // Other nodes are followers.
         _ => Node::create_raft_follower(this_peer_port,zeromq_reciever, peers),
     };
@@ -126,6 +129,8 @@ fn main() {
             zeromq_sender.send(Update::RaftMessage(received_message));
         }
     );
+
+    let mut proposal_responses = Vec::new();
 
 
     let handle = thread::spawn(move ||
@@ -165,6 +170,42 @@ fn main() {
                 for p in proposals.iter_mut().skip_while(|p| p.proposed > 0) {
                     node.propose(p);
                 }
+                let mut conf_change_proposals = conf_change_proposals.lock().unwrap();
+                for p in conf_change_proposals.iter_mut().skip_while(|p| p.proposed > 0) {
+                    node.propose(p);
+                }
+
+                //Add new Block
+                if new_block_timer.elapsed() >= Duration::from_secs(20) {
+                    let mut new_block_id;
+
+                    if let Some(last_block) = node.blockchain.get_last_block() {
+                        new_block_id = last_block.block_id + 1;
+                    }else {
+                        //First block - genesis
+                        new_block_id = 1;
+                    }
+                    println!("----------------------");
+                    println!("Adding new block - {}",new_block_id);
+                    println!("----------------------");
+                    let new_block = Block::new(new_block_id, 1,1,0,"1".to_string(),now(), vec![0; 32], vec![0; 32], vec![0; 64]);
+                    let (proposal, rx) = Proposal::new_block(new_block);
+                    proposal_responses.push(rx);
+                    proposals.push_back(proposal);
+                    new_block_timer = Instant::now();
+
+//                    for receiver in proposal_responses.iter() {
+//                        match receiver.try_recv() {
+//                            Err(TryRecvError::Empty) => (),
+//                            Err(TryRecvError::Disconnected) => {println!("Proposal transmiter end is disconnected")},
+//                            Ok(confirmation) => {
+//                                if confirmation{
+//                                    println!("Block was commited - client was informed");
+//                                }
+//                            }
+//                        }
+//                    }
+                }
             }
 
             let x = match node.raw_node {
@@ -187,35 +228,17 @@ fn main() {
             }
 
 
-            node.on_ready( &proposals);
+            node.on_ready( &proposals, &conf_change_proposals);
 
         });
 
     if is_leader == 1 {
         for peer in peer_list.iter() {
-            add_new_node(proposals_global.as_ref(), *peer);
+            add_new_node(conf_change_proposals_global.as_ref(), *peer);
         }
     }
 
-    //add new block every 20 seconds
-    let mut block_index = 1;
-    loop{
-        if is_leader == 1 {
-            println!("----------------------");
-            println!("Adding new block - {}",block_index);
-            println!("----------------------");
-            let new_block = Block::new(block_index, 1,1,0,"1".to_string(),now(), vec![0; 32], vec![0; 32], vec![0; 64]);
-            let (proposal, rx) = Proposal::new_block(new_block);
-            proposals_global.lock().unwrap().push_back(proposal);
-            // After we got a response from `rx`, we can assume that block was inserted successfully to the blockchain
-            rx.recv().unwrap();
-            println!("Client recieved confirmation about block insertion.");
-            block_index+=1;
-        }
-        thread::sleep(Duration::from_secs(20));
-    }
-
-        handle.join().unwrap();
+    handle.join().unwrap();
 
 }
 
@@ -234,13 +257,10 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     let mut conf_change = ConfChange::default();
     conf_change.set_node_id(node_id);
     conf_change.set_change_type(ConfChangeType::AddNode);
-    loop {
-        let (proposal, rx) = Proposal::conf_change(&conf_change);
-        proposals.lock().unwrap().push_back(proposal);
-        if rx.recv().unwrap() {
-            break;
-        }
-        thread::sleep(Duration::from_millis(100));
+    let (proposal, rx) = Proposal::conf_change(&conf_change);
+    proposals.lock().unwrap().push_back(proposal);
+    if rx.recv().unwrap() {
+        println!("Node {:?} succesfully added to cluster", node_id);
     }
 }
 

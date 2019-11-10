@@ -1,6 +1,6 @@
 use std::fmt::{ self, Debug, Formatter };
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
     pub block_id: u64,
     pub epoch_seq_num: u64, // Every block has its sequence number in epoch

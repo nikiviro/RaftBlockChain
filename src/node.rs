@@ -9,7 +9,7 @@ use raft::{prelude::*, StateRole};
 pub use crate::blockchain::block::Block;
 pub use crate::blockchain::*;
 use crate::proposal::Proposal;
-use crate::RaftPeer;
+use crate::{RaftPeer, now};
 use protobuf::{self, Message as ProtobufMessage};
 
 
@@ -29,6 +29,7 @@ impl Node {
         id: u64,
         my_mailbox: Receiver<Update>,
         mailboxes: HashMap<u64, RaftPeer>,
+        peers_list: Vec<u64>,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut cfg = Config {
@@ -84,7 +85,7 @@ impl Node {
             return;
         }
         let mut cfg = Config {
-            election_tick: 10,
+            election_tick: 100,
             heartbeat_tick: 3,
             id: msg.get_to(),
             tag: format!("raft_node{}", msg.get_to()),
@@ -118,7 +119,7 @@ impl Node {
         let last_index2 = raw_node.raft.raft_log.last_index() + 1;
         if last_index2 == last_index1 {
             // Propose failed, don't forget to respond to the client.
-            proposal.propose_success.send(false).unwrap();
+            //proposal.propose_success.send(false).unwrap();
         } else {
             proposal.proposed = last_index1;
         }
@@ -127,6 +128,7 @@ impl Node {
     pub fn on_ready(
         &mut self,
         proposals: &Mutex<VecDeque<Proposal>>,
+        conf_change_proposals: &Mutex<VecDeque<Proposal>>,
     ) {
         let raw_node = match self.raw_node {
             Some(ref mut r) => r,
@@ -181,6 +183,7 @@ impl Node {
                     let node_id = cc.get_node_id();
                     match cc.get_change_type() {
                         ConfChangeType::AddNode => raw_node.raft.add_node(node_id).unwrap(),
+                        ConfChangeType::AddNode => raw_node.raft.add_node(node_id).unwrap(),
                         ConfChangeType::RemoveNode => raw_node.raft.remove_node(node_id).unwrap(),
                         ConfChangeType::AddLearnerNode => raw_node.raft.add_learner(node_id).unwrap(),
                         ConfChangeType::BeginMembershipChange
@@ -189,12 +192,22 @@ impl Node {
                     let cs = ConfState::from(raw_node.raft.prs().configuration().clone());
                     store.wl().set_conf_state(cs, None);
 
+                    if raw_node.raft.state == StateRole::Leader {
+                        // The leader should response to the clients, tell them if their proposals
+                        // succeeded or not.
+                        let conf_change_proposals = conf_change_proposals.lock().unwrap().pop_front().unwrap();
+                        conf_change_proposals.propose_success.send(true).unwrap();
+                    }
+
+
                 }  else {
                     // For normal proposals, extract block from message
                     // insert block into the blockchain
                     let block_id: u64 = bincode::deserialize(&entry.get_data()).unwrap();
                     //let block_index = block.block_id;
-                    //self.blockchain.add_block(block);
+                    let block = block::Block::new(block_id, 0, 0, 0, "".to_string(), now(), vec![0], vec![0], vec![0]);
+                    println!("New block added: {:?}", &block);
+                    self.blockchain.add_block(block);
                     let node_role;
                     if raw_node.raft.state == StateRole::Leader{
                         node_role = String::from("Leader");
@@ -203,18 +216,14 @@ impl Node {
                     }
                     println!("Node {} - {} added new block at index {}",raw_node.raft.id, node_role,block_id);
                 }
-                if raw_node.raft.state == StateRole::Leader {
-                    // The leader should response to the clients, tell them if their proposals
-                    // succeeded or not.
-                    let proposal = proposals.lock().unwrap().pop_front().unwrap();
-                    proposal.propose_success.send(true).unwrap();
-                }
             }
             if let Some(last_committed) = committed_entries.last() {
                 let mut s = store.wl();
                 s.mut_hard_state().set_commit(last_committed.get_index());
                 s.mut_hard_state().set_term(last_committed.get_term());
             }
+            let  leader_id = raw_node.raft.leader_id;
+            println!("Current leader : {} ",leader_id);
         }
         // Call `RawNode::advance` interface to update position flags in the raft.
         raw_node.advance(ready);
