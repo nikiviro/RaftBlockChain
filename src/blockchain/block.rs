@@ -4,10 +4,10 @@ use std::fmt::{ self, Debug, Formatter };
 pub struct Block {
     pub block_id: u64,
     pub epoch_seq_num: u64, // Every block has its sequence number in epoch
-    pub preamble_version: u32,
-    pub block_size: u64,
-    pub prev_block_size: u64,
-    pub color_id: String,
+    pub preamble_version: u32, //Version of preamble (blockchain header) to know hhow to threat the block
+    pub block_size: u64, // Size of this block in bytes
+    pub prev_block_size: u64, //Size of previous block in bytes
+    pub color_id: String, // Identification of color and its space this block belongs to
     pub timestamp: u128,
     pub hash: Vec<u8>,
     pub prev_block_hash: Vec<u8>,

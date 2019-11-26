@@ -17,8 +17,6 @@ pub struct Node {
     pub raw_node: Option<RawNode<MemStorage>>,
     pub my_mailbox: Receiver<Update>,
     pub mailboxes: HashMap<u64, Sender<Update>>,
-    // Key-value pairs after applied. `MemStorage` only contains raft logs,
-    // so we need an additional storage engine.
     pub blockchain: Blockchain,
 }
 
@@ -29,6 +27,7 @@ impl Node {
         my_mailbox: Receiver<Update>,
         mailboxes: HashMap<u64, Sender<Update>>,
     ) -> Self {
+        //TODO: Load configuration from genesis/configuration block
         let mut cfg = Config {
             election_tick: 10,
             heartbeat_tick: 3,
@@ -54,6 +53,7 @@ impl Node {
         my_mailbox: Receiver<Update>,
         mailboxes: HashMap<u64, Sender<Update>>,
     ) -> Self {
+        //TODO: Load configuration from genesis/configuration block
         Node {
             id,
             raw_node: None,
@@ -62,6 +62,7 @@ impl Node {
             blockchain: Blockchain::new(),
         }
     }
+
     // Step a raft message, initialize the raft if need.
     pub fn step(&mut self, msg: Message) {
         if self.raw_node.is_none() {

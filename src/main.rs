@@ -107,7 +107,7 @@ fn main() {
 
                 // Let the leader pick pending proposals from the global queue.
                 //TODO: Propose new block only when the block is valid
-                //TODO: Make sure that new block block will be proposed after previus block was finally commited/rejecte by network
+                //TODO: Make sure that new block block will be proposed after previous block was finally committed/rejected by network
                 if raft.raft.state == StateRole::Leader {
                     // Handle new proposals.
                     let mut proposals = proposals.lock().unwrap();
@@ -128,7 +128,7 @@ fn main() {
                     leader_stop_timer = Instant::now();
                 }
                 //if node is Leader for longer then 60 seconds - sleep node threed, new leader should
-                // be elected and after wake up this node should catch current log and blockchain state
+                //be elected and after wake up this node should catch current log and blockchain state
                 if x.raft.state == StateRole::Leader && node.blockchain.blocks.len() >3 && leader_stop_timer.elapsed() >= Duration::from_secs(60){
                     print!("Leader {:?} is going to sleep for 60 seconds - new election should be held.\n", x.raft.id);
                     thread::sleep(Duration::from_secs(30));
@@ -159,6 +159,7 @@ fn main() {
         blockchain_updates.lock().unwrap().push_back(proposal);
         // After we got a response from `rx`, we can assume that block was inserted successfully to the blockchain
         rx.recv().unwrap();
+        println!("Client recieved confirmation about block insertion.");
         block_index+=1;
         thread::sleep(Duration::from_secs(20));
     }
