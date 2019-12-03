@@ -21,6 +21,7 @@ pub struct Node {
     pub my_mailbox: Receiver<Update>,
     pub mailboxes: HashMap<u64, RaftPeer>,
     pub blockchain: Blockchain,
+    pub is_node_without_raft: bool,
 }
 
 impl Node {
@@ -48,6 +49,7 @@ impl Node {
             my_mailbox,
             mailboxes,
             blockchain: Blockchain::new(),
+            is_node_without_raft: false
         }
     }
 
@@ -56,6 +58,7 @@ impl Node {
         id: u64,
         my_mailbox: Receiver<Update>,
         mailboxes: HashMap<u64, RaftPeer>,
+        is_node_without_raft: bool,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         Node {
@@ -64,6 +67,7 @@ impl Node {
             my_mailbox,
             mailboxes,
             blockchain: Blockchain::new(),
+            is_node_without_raft: is_node_without_raft,
         }
     }
 
@@ -164,8 +168,9 @@ impl Node {
         for msg in ready.messages.drain(..) {
             //print!("Sending message:{:?}",msg);
             let to = msg.get_to();
-            //let message_to_send = Update::RaftMessage(msg);
-            let data = msg.write_to_bytes().unwrap();
+            let message_to_send = Update::RaftMessage(RaftMessage::new(msg));
+            let data = bincode::serialize(&message_to_send).expect("Error while serializing Update RaftMessage");
+            //let data = msg.write_to_bytes().unwrap();
             self.mailboxes[&to].socket.send(data,0).unwrap();
         }
 
@@ -202,19 +207,31 @@ impl Node {
 
                 }  else {
                     // For normal proposals, extract block from message
-                    // insert block into the blockchain
+                    // If node is leader and blockid was commited:
+                    //  - insert block into the blockchain
+                    //  - announce new block to network
+
                     let block_id: u64 = bincode::deserialize(&entry.get_data()).unwrap();
-                    //let block_index = block.block_id;
-                    let block = block::Block::new(block_id, 0, 0, 0, "".to_string(), now(), vec![0], vec![0], vec![0]);
-                    println!("New block added: {:?}", &block);
-                    self.blockchain.add_block(block);
-                    let node_role;
                     if raw_node.raft.state == StateRole::Leader{
-                        node_role = String::from("Leader");
-                    }else{
-                        node_role = String::from("Follower");
+                        let block = block::Block::new(block_id, 0, 0, 0, "".to_string(), now(), vec![0], vec![0], vec![0]);
+                        self.blockchain.add_block(block);
+                        println!("Leader added new block: {:?}", self.blockchain.get_last_block());
+                        println!("Node {} - Leader added new block at index {}",raw_node.raft.id, block_id);
+
+                        for (id, peer) in &self.mailboxes {
+                            let message_to_send = Update::BlockNew(self.blockchain.get_last_block().unwrap());
+                            let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
+                            peer.socket.send(data,0);
+                        }
+
                     }
-                    println!("Node {} - {} added new block at index {}",raw_node.raft.id, node_role,block_id);
+//                    //let block_index = block.block_id;
+//                    let node_role;
+//                    if raw_node.raft.state == StateRole::Leader{
+//                        node_role = String::from("Leader");
+//                    }else{
+//                        node_role = String::from("Follower");
+//                    }
                 }
             }
             if let Some(last_committed) = committed_entries.last() {
@@ -222,23 +239,46 @@ impl Node {
                 s.mut_hard_state().set_commit(last_committed.get_index());
                 s.mut_hard_state().set_term(last_committed.get_term());
             }
-            let  leader_id = raw_node.raft.leader_id;
-            println!("Current leader : {} ",leader_id);
+//            let  leader_id = raw_node.raft.leader_id;
+//            println!("Current leader : {} ",leader_id);
         }
         // Call `RawNode::advance` interface to update position flags in the raft.
         raw_node.advance(ready);
     }
 
-    pub fn on_block_new(&mut self, block: Block) {
+    pub fn on_raft_message(&mut self, message: &[u8]){
+        let raft_message = protobuf::parse_from_bytes::<Message>(message).unwrap();
+        self.step(raft_message);
+    }
 
+    pub fn on_block_new(&mut self, block: Block) {
+        let block_id = block.block_id;
+        self.blockchain.add_block(block);
+        println!("Node {} added new block at index {}", self.id, block_id);
     }
 }
-#[derive(Debug)]
+#[derive(Debug,Serialize, Deserialize)]
 pub enum Update {
     BlockNew(Block),
-    RaftMessage(Message),
+    RaftMessage(RaftMessage),
 }
 
+#[derive(Debug,Serialize, Deserialize)]
+pub struct RaftMessage{
+    pub content: Vec<u8>,
+}
+
+impl RaftMessage{
+    pub fn new(
+        message: Message,
+    ) -> Self {
+        let content =  message.write_to_bytes().expect("Error while serializing raft message!");
+
+        RaftMessage{
+            content,
+        }
+    }
+}
 // The message can be used to initialize a raft node or not.
 fn is_initial_msg(msg: &Message) -> bool {
     let msg_type = msg.get_msg_type();
