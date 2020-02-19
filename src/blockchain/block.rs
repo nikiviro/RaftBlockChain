@@ -1,4 +1,4 @@
-use std::fmt::{ self, Debug, Formatter };
+use std::fmt::{self, Debug, Formatter};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Block {

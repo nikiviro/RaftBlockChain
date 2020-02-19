@@ -1,8 +1,9 @@
-use raft::{prelude::*, StateRole};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
 
-pub use crate::blockchain::block::Block;
+use raft::{prelude::*, StateRole};
+
 pub use crate::blockchain::*;
+pub use crate::blockchain::block::Block;
 
 pub struct Proposal {
     pub block: Option<Block>, // block id of block that should be proposed to nodes

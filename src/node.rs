@@ -1,25 +1,25 @@
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
+
 use prost::Message as ProstMsg;
+use protobuf::{self, Message as ProtobufMessage};
+use raft::{prelude::*, StateRole};
 use raft::eraftpb::ConfState;
 use raft::storage::MemStorage;
-use raft::{prelude::*, StateRole};
 
-pub use crate::blockchain::block::Block;
 pub use crate::blockchain::*;
+pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
-use crate::{RaftPeer, now};
-use protobuf::{self, Message as ProtobufMessage};
-
-
+use crate::p2p::networkManager::NetworkManager;
+use crate::now;
 
 pub struct Node {
     // None if the raft is not initialized.
     pub id: u64,
     pub raw_node: Option<RawNode<MemStorage>>,
     pub my_mailbox: Receiver<Update>,
-    pub mailboxes: HashMap<u64, RaftPeer>,
+    pub mailboxes: NetworkManager,
     pub blockchain: Blockchain,
     pub is_node_without_raft: bool,
 }
@@ -29,7 +29,7 @@ impl Node {
     pub fn create_raft_leader(
         id: u64,
         my_mailbox: Receiver<Update>,
-        mailboxes: HashMap<u64, RaftPeer>,
+        mailboxes: NetworkManager,
         peers_list: Vec<u64>,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
@@ -57,7 +57,7 @@ impl Node {
     pub fn create_raft_follower(
         id: u64,
         my_mailbox: Receiver<Update>,
-        mailboxes: HashMap<u64, RaftPeer>,
+        mailboxes: NetworkManager,
         is_node_without_raft: bool,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
@@ -171,7 +171,7 @@ impl Node {
             let message_to_send = Update::RaftMessage(RaftMessage::new(msg));
             let data = bincode::serialize(&message_to_send).expect("Error while serializing Update RaftMessage");
             //let data = msg.write_to_bytes().unwrap();
-            self.mailboxes[&to].socket.send(data,0).unwrap();
+            self.mailboxes.peers[&to].socket.send(data,0).unwrap();
         }
 
         // Apply all committed proposals.
@@ -218,7 +218,7 @@ impl Node {
                         println!("Leader added new block: {:?}", self.blockchain.get_last_block());
                         println!("Node {} - Leader added new block at index {}",raw_node.raft.id, block_id);
 
-                        for (id, peer) in &self.mailboxes {
+                        for (id, peer) in &self.mailboxes.peers {
                             let message_to_send = Update::BlockNew(self.blockchain.get_last_block().unwrap());
                             let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
                             peer.socket.send(data,0);
