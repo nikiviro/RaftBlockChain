@@ -1,61 +1,44 @@
-use std::env;
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
+extern crate bincode;
+extern crate env_logger;
+#[macro_use]
+extern crate log;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+
+use std::thread;
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-use std::{ thread};
-use raft::{prelude::*, StateRole};
-use std::time::{ SystemTime, UNIX_EPOCH };
+use std::env;
 use std::process::exit;
+use std::sync::{Arc, Mutex};
+use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
+use std::time::{Duration, Instant};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+use config::{Config as ConfigLoader, File};
 use protobuf::{self, Message as ProtobufMessage};
-use config::{File, Config as ConfigLoader};
+use raft::{prelude::*, StateRole};
+use zmq::Socket;
+
+pub use crate::blockchain::*;
+pub use crate::blockchain::block::Block;
+pub use crate::node::*;
+pub use crate::node::Node;
+pub use crate::proposal::Proposal;
+use crate::p2p::networkManager::NetworkManager;
 
 mod blockchain;
 mod node;
 mod proposal;
-pub use crate::blockchain::block::Block;
-pub use crate::blockchain::*;
-
-pub use crate::node::*;
-pub use crate::node::Node;
-pub use crate::proposal::Proposal;
-use zmq::Socket;
+mod p2p;
 
 pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(100);
 
-#[macro_use]
-extern crate serde_derive;
-extern crate serde;
-extern crate bincode;
-
-
-#[macro_use]
-extern crate log;
-extern crate env_logger;
 
 #[derive(Serialize, Deserialize,Debug)]
 pub struct ConfigStruct {
     pub nodes_without_raft: Vec<String>,
 }
-
-pub struct RaftPeer {
-    pub peer_port: u64,
-    pub socket: Socket,
-}
-
-impl RaftPeer {
-    pub fn create_peer(
-        peer_port: u64,
-        socket: Socket,
-    ) -> Self {
-
-        RaftPeer {
-            peer_port,
-            socket,
-        }
-    }
-}
-
 
 fn main() {
     env_logger::init();
@@ -88,25 +71,19 @@ fn main() {
     //Create a channel for communication between main thread and zeromq receiver thread
     let (zeromq_sender, zeromq_reciever) = mpsc::channel();
 
-    //Create zeromQ context
-    let context = zmq::Context::new();
-    //Zeormq router socket - "RAFT PEER ENDPOINT"
-    //Other peers will connect to this socket
-    let router_socket = context.socket(zmq::ROUTER).unwrap();
+    //create NetworkManager - store Peers connection an ZeroMq context
+    let mut network_manager = NetworkManager::new();
+
+
+    let router_socket = network_manager.zero_mq_context.socket(zmq::ROUTER).unwrap();
     router_socket
         .bind(format!("tcp://*:{}", this_peer_port.to_string()).as_ref())
         .expect("Node failed to bind router socket");
 
-    //Create sockets for all peers
-    //Save peers into hashmap named peers
-    let mut peers = HashMap::new();
     for peer_port in peer_list.iter(){
-        let dealer_socket = context.socket(zmq::DEALER).unwrap();
-        dealer_socket
-            .connect(format!("tcp://localhost:{}", peer_port.to_string()).as_ref())
-            .expect("Failed to connect to peer");
-        peers.insert(peer_port.clone(), RaftPeer::create_peer(peer_port.clone(), dealer_socket));
+        network_manager.add_new_peer(peer_port.clone());
     }
+
 
     //Create new thread in which we will listen for incoming zeromq messages from other peers
     //Received message will be forwarded through the channel to main thread
@@ -138,9 +115,9 @@ fn main() {
 
         let mut node = match is_leader {
             // Create node 1 as leader
-            1 => Node::create_raft_leader(this_peer_port, zeromq_reciever, peers,peer_list.clone()),
+            1 => Node::create_raft_leader(this_peer_port, zeromq_reciever, network_manager,peer_list.clone()),
             // Other nodes are followers.
-            _ => Node::create_raft_follower(this_peer_port,zeromq_reciever, peers,true),
+            _ => Node::create_raft_follower(this_peer_port,zeromq_reciever, network_manager,true),
         };
 
         let mut proposal_responses = Vec::new();
