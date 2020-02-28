@@ -11,7 +11,7 @@ use raft::storage::MemStorage;
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
-use crate::p2p::networkManager::NetworkManager;
+use crate::p2p::network_manager::NetworkManager;
 use crate::now;
 
 pub struct Node {

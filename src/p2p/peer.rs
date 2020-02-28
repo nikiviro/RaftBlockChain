@@ -10,7 +10,7 @@ pub struct Peer {
 impl Peer {
     pub fn new(
         peer_port: u64,
-        context: Context
+        context: &Context
     ) -> Self {
         let dealer_socket = context.socket(zmq::DEALER).unwrap();
         dealer_socket

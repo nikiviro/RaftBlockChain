@@ -25,7 +25,7 @@ pub use crate::blockchain::block::Block;
 pub use crate::node::*;
 pub use crate::node::Node;
 pub use crate::proposal::Proposal;
-use crate::p2p::networkManager::NetworkManager;
+use crate::p2p::network_manager::NetworkManager;
 
 mod blockchain;
 mod node;
@@ -67,37 +67,19 @@ fn main() {
         println!("No-RAFT node")
     }
 
-
-    //Create a channel for communication between main thread and zeromq receiver thread
-    let (zeromq_sender, zeromq_reciever) = mpsc::channel();
-
     //create NetworkManager - store Peers connection an ZeroMq context
     let mut network_manager = NetworkManager::new();
 
 
-    let router_socket = network_manager.zero_mq_context.socket(zmq::ROUTER).unwrap();
-    router_socket
-        .bind(format!("tcp://*:{}", this_peer_port.to_string()).as_ref())
-        .expect("Node failed to bind router socket");
+    //Network manager will crate ZeroMq ROUTER socket and listen on specified port
+    //call to network_manager.listen() returns channel Receiver - messages received on ROUTER socket
+    //will be forwarded through this channel.
+    let zeromq_reciever = network_manager.listen(this_peer_port);
+
 
     for peer_port in peer_list.iter(){
         network_manager.add_new_peer(peer_port.clone());
     }
-
-
-    //Create new thread in which we will listen for incoming zeromq messages from other peers
-    //Received message will be forwarded through the channel to main thread
-    let receiver_thread_handle = thread::spawn( move ||
-        loop {
-            let msq = router_socket.recv_multipart(0).unwrap();
-            //println!("Received {:?}", msg);
-            //thread::sleep(Duration::from_millis(1000));
-            //responder.send("World", 0).unwrap();
-            let data = &msq[1];
-            let received_message: Update = bincode::deserialize(&data).expect("Cannot deserialize update message");
-            zeromq_sender.send(received_message);
-        }
-    );
 
     if(!is_node_without_raft){
         //Que for storing blockchain updates requests (e.g adding new block)

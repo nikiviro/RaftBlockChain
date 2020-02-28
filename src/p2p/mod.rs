@@ -1,3 +1,3 @@
 pub mod peer;
 pub mod peers;
-pub mod networkManager;
+pub mod network_manager;
