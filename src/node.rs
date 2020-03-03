@@ -169,7 +169,7 @@ impl Node {
             let message_to_send = Update::RaftMessage(RaftMessage::new(msg));
             let data = bincode::serialize(&message_to_send).expect("Error while serializing Update RaftMessage");
             //let data = msg.write_to_bytes().unwrap();
-            self.mailboxes.peers[&to].socket.send(data,0).unwrap();
+            self.network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(to, data)));
         }
 
         // Apply all committed proposals.
@@ -216,11 +216,10 @@ impl Node {
                         println!("Leader added new block: {:?}", self.blockchain.get_last_block());
                         println!("Node {} - Leader added new block at index {}",raw_node.raft.id, block_id);
 
-                        for (id, peer) in &self.mailboxes.peers {
-                            let message_to_send = Update::BlockNew(self.blockchain.get_last_block().unwrap());
-                            let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
-                            peer.socket.send(data,0);
-                        }
+                        let message_to_send = Update::BlockNew(self.blockchain.get_last_block().unwrap());
+                        let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
+
+                        self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
 
                     }
 //                    //let block_index = block.block_id;
