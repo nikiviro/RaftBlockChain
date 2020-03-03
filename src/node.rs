@@ -11,26 +11,25 @@ use raft::storage::MemStorage;
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
-use crate::p2p::network_manager::NetworkManager;
+use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest};
 use crate::now;
 
 pub struct Node {
     // None if the raft is not initialized.
     pub id: u64,
     pub raw_node: Option<RawNode<MemStorage>>,
-    pub my_mailbox: Receiver<Update>,
-    pub mailboxes: NetworkManager,
+    pub network_manager_sender: Sender<NetworkManagerMessage>,
     pub blockchain: Blockchain,
     pub is_node_without_raft: bool,
+    pub is_changing_config: bool
 }
 
 impl Node {
     // Create a raft leader only with itself in its configuration.
     pub fn create_raft_leader(
         id: u64,
-        my_mailbox: Receiver<Update>,
-        mailboxes: NetworkManager,
-        peers_list: Vec<u64>,
+        network_manager: Sender<NetworkManagerMessage>,
+//        peers_list: Vec<u64>,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut cfg = Config {
@@ -46,28 +45,27 @@ impl Node {
         Node {
             id,
             raw_node: raft,
-            my_mailbox,
-            mailboxes,
+            network_manager_sender: network_manager,
             blockchain: Blockchain::new(),
-            is_node_without_raft: false
+            is_node_without_raft: false,
+            is_changing_config: false
         }
     }
 
     // Create a raft follower.
     pub fn create_raft_follower(
         id: u64,
-        my_mailbox: Receiver<Update>,
-        mailboxes: NetworkManager,
+        network_manager: Sender<NetworkManagerMessage>,
         is_node_without_raft: bool,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         Node {
             id,
             raw_node: None,
-            my_mailbox,
-            mailboxes,
+            network_manager_sender: network_manager,
             blockchain: Blockchain::new(),
             is_node_without_raft: is_node_without_raft,
+            is_changing_config: false
         }
     }
 
