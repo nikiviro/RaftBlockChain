@@ -33,7 +33,21 @@ impl NetworkManager {
         &mut self,
         port: u64
     ){
-        self.peers.insert(port, Peer::new(port, &self.zero_mq_context));
+        self.peers.insert(port,Peer::new(port,&self.zero_mq_context));
+    }
+
+    pub fn start(&self) {
+        loop {
+            // Step raft messages.
+            match self.network_manager_receiver.try_recv() {
+                Err(TryRecvError::Empty) => (),
+                Err(TryRecvError::Disconnected) => return,
+                Ok(message) => {
+                    debug!("Update: {:?}", message);
+                    self.process_request(message);
+                }
+            }
+        }
     }
 
     pub fn listen(&self, port: u64) -> Receiver<Update>{
