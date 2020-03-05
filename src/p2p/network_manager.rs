@@ -1,21 +1,31 @@
 use std::collections::HashMap;
 
 use crate::p2p::peer::Peer;
-use zmq::Context;
+use zmq::{Context, Sendable};
 use std::thread;
 use crate::Update;
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
+use std::sync::RwLock;
 
 pub struct NetworkManager {
     pub peers: HashMap<u64, Peer>,
-    pub zero_mq_context: Context
+    pub zero_mq_context: Context,
+    pub network_manager_sender: Sender<NetworkManagerMessage>,
+    network_manager_receiver: Receiver<NetworkManagerMessage>,
+    raft_engine_sender: Option<Sender<Update>>
+
 }
 
 impl NetworkManager {
     pub fn new() -> Self{
+        let (network_manager_sender, network_manager_receiver) = mpsc::channel();
+
         NetworkManager {
             peers: HashMap::new(),
-            zero_mq_context: Default::default()
+            zero_mq_context: Default::default(),
+            network_manager_sender,
+            network_manager_receiver,
+            raft_engine_sender: None
         }
     }
 
