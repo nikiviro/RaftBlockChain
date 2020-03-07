@@ -59,20 +59,82 @@ impl NetworkManager {
             .bind(format!("tcp://*:{}", port.to_string()).as_ref())
             .expect("Node failed to bind router socket");
 
-        //Create new thread in which we will listen for incoming zeromq messages from other peers
-        //Received message will be forwarded through the channel to main thread
-        let receiver_thread_handle = thread::spawn( move ||
-            loop {
-                let msq = router_socket.recv_multipart(0).unwrap();
-                //println!("Received {:?}", msg);
-                //thread::sleep(Duration::from_millis(1000));
-                //responder.send("World", 0).unwrap();
-                let data = &msq[1];
-                let received_message: Update = bincode::deserialize(&data).expect("Cannot deserialize update message");
-                zeromq_sender.send(received_message);
-            }
-        );
+        let mut raft_engine_sender;
+        if let Some(ref raft_sender) = self.raft_engine_sender{
+            raft_engine_sender = raft_sender.clone();
+
+            //Create new thread in which we will listen for incoming zeromq messages from other peers
+            //Received message will be forwarded through the channel to main thread
+            let receiver_thread_handle = thread::spawn( move ||
+                loop {
+                    let msq = router_socket.recv_multipart(0).unwrap();
+                    //println!("Received {:?}", msg);
+                    //thread::sleep(Duration::from_millis(1000));
+                    //responder.send("World", 0).unwrap();
+                    let data = &msq[1];
+                    let received_message: Update = bincode::deserialize(&data).expect("Cannot deserialize update message");
+                    //zeromq_sender.send(received_message);
+                    raft_engine_sender.send(received_message);
+                }
+            );
+        }
 
         zeromq_reciever
+    }
+
+    pub fn send_to(&self, request: SendToRequest){
+        self.peers[&request.to].socket.send(request.data, 0).unwrap();
+    }
+
+    pub fn send_broadcast(&self, request: BroadCastRequest){
+        for (id, peer) in self.peers.iter() {
+            peer.socket.send(request.data.clone(),0);
+        }
+    }
+
+    pub fn process_request(&self, message: NetworkManagerMessage){
+        match message {
+            NetworkManagerMessage::SendToRequest(request) => self.send_to(request),
+            NetworkManagerMessage::BroadCastRequest(request) => self.send_broadcast(request),
+            update => warn!("Unhandled update: {:?}", update),
+        }
+    }
+
+    pub fn set_raft_engine_sender(&mut self, sender: Sender<Update>){
+        self.raft_engine_sender = Some(sender);
+    }
+}
+
+#[derive(Debug)]
+pub enum NetworkManagerMessage {
+    SendToRequest(SendToRequest),
+    BroadCastRequest(BroadCastRequest)
+}
+
+#[derive(Debug)]
+pub struct SendToRequest {
+    to: u64,
+    data: Vec<u8>,
+}
+
+impl SendToRequest{
+    pub fn new ( to: u64, data: Vec<u8>) -> Self{
+        SendToRequest{
+            to,
+            data
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct BroadCastRequest {
+    data: Vec<u8>,
+}
+
+impl BroadCastRequest{
+    pub fn new (data: Vec<u8>) -> Self{
+        BroadCastRequest{
+            data
+        }
     }
 }
