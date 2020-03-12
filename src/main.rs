@@ -49,7 +49,8 @@ fn main() {
 
         exit(1);
     }
-    let is_leader: u8 = args[1].parse().unwrap();
+    let is_leader_arg: u8= args[1].parse().unwrap();
+    let is_leader = is_leader_arg != 0;
     let this_peer_port: u64 = args[2].parse().unwrap();
     let mut peer_list = Vec::new();
     for x in 3..(args.len()){
