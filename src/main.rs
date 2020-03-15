@@ -10,7 +10,7 @@ use std::thread;
 use std::collections::{HashMap, VecDeque};
 use std::env;
 use std::process::exit;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
 use std::time::{Duration, Instant};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -26,11 +26,13 @@ pub use crate::node::*;
 pub use crate::node::Node;
 pub use crate::proposal::Proposal;
 use crate::p2p::network_manager::NetworkManager;
+use crate::raft_engine::RaftEngine;
 
 mod blockchain;
 mod node;
 mod proposal;
 mod p2p;
+mod raft_engine;
 
 pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(100);
 
