@@ -129,18 +129,6 @@ fn main() {
     }
 }
 
-fn handle_update(node: &mut Node, update: Update) -> bool {
-    match update {
-        Update::BlockNew(block) => node.on_block_new(block),
-        Update::RaftMessage(message) => node.on_raft_message(&message.content),
-        //Update::Shutdown => return false,
-
-        update => warn!("Unhandled update: {:?}", update),
-    }
-    true
-}
-
-
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     let mut conf_change = ConfChange::default();
     conf_change.set_node_id(node_id);
