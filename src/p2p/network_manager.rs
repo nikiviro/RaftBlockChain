@@ -12,12 +12,13 @@ pub struct NetworkManager {
     pub zero_mq_context: Context,
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     network_manager_receiver: Receiver<NetworkManagerMessage>,
-    raft_engine_sender: Option<Sender<Update>>
+    raft_engine_sender: Option<Sender<Update>>,
+    node_sender: Sender<Update>,
 
 }
 
 impl NetworkManager {
-    pub fn new() -> Self{
+    pub fn new(node_sender: Sender<Update>) -> Self{
         let (network_manager_sender, network_manager_receiver) = mpsc::channel();
 
         NetworkManager {
@@ -25,7 +26,8 @@ impl NetworkManager {
             zero_mq_context: Default::default(),
             network_manager_sender,
             network_manager_receiver,
-            raft_engine_sender: None
+            raft_engine_sender: None,
+            node_sender: node_sender
         }
     }
 
@@ -36,7 +38,13 @@ impl NetworkManager {
         self.peers.insert(port,Peer::new(port,&self.zero_mq_context));
     }
 
-    pub fn start(&self) {
+    pub fn start(&mut self, this_peer_port: u64,peer_list: Vec<u64>) {
+
+        for peer_port in peer_list.iter(){
+            self.add_new_peer(peer_port.clone());
+        }
+        self.listen(this_peer_port);
+
         loop {
             // Step raft messages.
             match self.network_manager_receiver.try_recv() {
