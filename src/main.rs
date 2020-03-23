@@ -22,17 +22,19 @@ use zmq::Socket;
 
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
-pub use crate::node::*;
-pub use crate::node::Node;
+pub use crate::raft_node::*;
+pub use crate::raft_node::RaftNode;
 pub use crate::proposal::Proposal;
 use crate::p2p::network_manager::NetworkManager;
 use crate::raft_engine::RaftEngine;
+use crate::node::Node;
 
 mod blockchain;
-mod node;
+mod raft_node;
 mod proposal;
 mod p2p;
 mod raft_engine;
+mod node;
 
 pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -62,71 +64,17 @@ fn main() {
     }
 
 
-    let mut is_node_without_raft = false;
+    let mut is_raft_node = true;
     let config = load_config_from_file();
 
     if config.nodes_without_raft.contains(&this_peer_port.to_string()){
-        is_node_without_raft = true;
+        is_raft_node = false;
         println!("No-RAFT node")
     }
 
-    //create NetworkManager - store Peers connection and ZeroMq context
-    let mut network_manager = NetworkManager::new();
+    let mut node = Node::new(this_peer_port);
 
-    for peer_port in peer_list.iter(){
-        network_manager.add_new_peer(peer_port.clone());
-    }
-
-
-    let mut raft_engine = RaftEngine::new(network_manager.network_manager_sender.clone());
-    network_manager.set_raft_engine_sender(raft_engine.raft_engine_client.clone());
-
-    //Network manager will crate ZeroMq ROUTER socket and listen on specified port
-    //call to network_manager.listen() returns channel Receiver - messages received on ROUTER socket
-    //will be forwarded through this channel.
-    let zeromq_reciever = network_manager.listen(this_peer_port);
-
-    let test = raft_engine.conf_change_proposals_global.clone();
-    let test2 = peer_list.clone();
-
-    thread::spawn( move ||
-        network_manager.start()
-    );
-
-    if(!is_node_without_raft){
-
-        let handle = thread::spawn( move || {
-            raft_engine.start(this_peer_port,is_leader,peer_list);
-        }
-
-    );
-
-        if is_leader {
-            for peer in test2.iter() {
-                add_new_node(test.as_ref(), *peer);
-            }
-        }
-
-        handle.join().unwrap();
-
-    }
-    else{
-        loop{
-            match zeromq_reciever.try_recv() {
-                Err(TryRecvError::Empty) => (),
-                Err(TryRecvError::Disconnected) => return,
-                Ok(update) => {
-                    match update {
-                        Update::BlockNew(block) => {
-                            println!("Received information about new block:{:?}",block)
-                        }
-                        update => warn!("Unhandled update: {:?}", update),
-                    }
-                    //debug!("Update: {:?}", update);
-                }
-            }
-        }
-    }
+    node.start(this_peer_port, is_raft_node, is_leader, peer_list)
 }
 
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
