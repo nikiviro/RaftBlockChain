@@ -14,7 +14,7 @@ use crate::proposal::Proposal;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest};
 use crate::now;
 
-pub struct Node {
+pub struct RaftNode {
     // None if the raft is not initialized.
     pub id: u64,
     pub raw_node: Option<RawNode<MemStorage>>,
@@ -24,7 +24,7 @@ pub struct Node {
     pub is_changing_config: bool
 }
 
-impl Node {
+impl RaftNode {
     // Create a raft leader only with itself in its configuration.
     pub fn create_raft_leader(
         id: u64,
@@ -42,7 +42,7 @@ impl Node {
 
         let storage = MemStorage::new_with_conf_state(ConfState::from((vec![id], vec![])));
         let raft = Some(RawNode::new(&cfg, storage).unwrap());
-        Node {
+        RaftNode {
             id,
             raw_node: raft,
             network_manager_sender: network_manager,
@@ -59,7 +59,7 @@ impl Node {
         is_node_without_raft: bool,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
-        Node {
+        RaftNode {
             id,
             raw_node: None,
             network_manager_sender: network_manager,

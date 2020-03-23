@@ -1,5 +1,5 @@
 use std::sync::mpsc::{Receiver, TryRecvError, Sender};
-use crate::{Update, Node, Proposal, Block, now};
+use crate::{Update, RaftNode, Proposal, Block, now};
 use std::thread;
 use std::time::{Duration, Instant};
 use raft::storage::MemStorage;
@@ -53,11 +53,11 @@ impl RaftEngine {
 
         let mut raft_node = match is_leader {
             // Create node 1 as leader
-            true => Node::create_raft_leader(
+            true => RaftNode::create_raft_leader(
                 raft_node_id,
                 self.network_manager_sender.clone()),
             // Other nodes are followers.
-            _ => Node::create_raft_follower(
+            _ => RaftNode::create_raft_follower(
                 raft_node_id,
                 self.network_manager_sender.clone(),
                 true)
@@ -161,7 +161,7 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
 }
 
 
-fn handle_update(raft_node: &mut Node, update: Update) -> bool {
+fn handle_update(raft_node: &mut RaftNode, update: Update) -> bool {
     match update {
         Update::BlockNew(block) => raft_node.on_block_new(block),
         Update::RaftMessage(message) => raft_node.on_raft_message(&message.content),
