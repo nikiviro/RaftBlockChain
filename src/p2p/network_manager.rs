@@ -12,7 +12,6 @@ pub struct NetworkManager {
     pub zero_mq_context: Context,
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     network_manager_receiver: Receiver<NetworkManagerMessage>,
-    raft_engine_sender: Option<Sender<Update>>,
     node_sender: Sender<Update>,
 
 }
@@ -26,7 +25,6 @@ impl NetworkManager {
             zero_mq_context: Default::default(),
             network_manager_sender,
             network_manager_receiver,
-            raft_engine_sender: None,
             node_sender: node_sender
         }
     }
@@ -58,36 +56,29 @@ impl NetworkManager {
         }
     }
 
-    pub fn listen(&self, port: u64) -> Receiver<Update>{
-
-        let (zeromq_sender, zeromq_reciever) = mpsc::channel();
+    pub fn listen(&self, port: u64){
 
         let router_socket = self.zero_mq_context.socket(zmq::ROUTER).unwrap();
         router_socket
             .bind(format!("tcp://*:{}", port.to_string()).as_ref())
             .expect("Node failed to bind router socket");
 
-        let mut raft_engine_sender;
-        if let Some(ref raft_sender) = self.raft_engine_sender{
-            raft_engine_sender = raft_sender.clone();
 
-            //Create new thread in which we will listen for incoming zeromq messages from other peers
-            //Received message will be forwarded through the channel to main thread
-            let receiver_thread_handle = thread::spawn( move ||
-                loop {
-                    let msq = router_socket.recv_multipart(0).unwrap();
-                    //println!("Received {:?}", msg);
-                    //thread::sleep(Duration::from_millis(1000));
-                    //responder.send("World", 0).unwrap();
-                    let data = &msq[1];
-                    let received_message: Update = bincode::deserialize(&data).expect("Cannot deserialize update message");
-                    //zeromq_sender.send(received_message);
-                    raft_engine_sender.send(received_message);
-                }
-            );
-        }
-
-        zeromq_reciever
+        //Create new thread in which we will listen for incoming zeromq messages from other peers
+        //Received message will be forwarded through the channel to main thread
+        let node_sender = self.node_sender.clone();
+        let receiver_thread_handle = thread::spawn( move ||
+            loop {
+                let msq = router_socket.recv_multipart(0).unwrap();
+                //println!("Received {:?}", msg);
+                //thread::sleep(Duration::from_millis(1000));
+                //responder.send("World", 0).unwrap();
+                let data = &msq[1];
+                let received_message: Update = bincode::deserialize(&data).expect("Cannot deserialize update message");
+                //zeromq_sender.send(received_message);
+                node_sender.send(received_message);
+            }
+        );
     }
 
     pub fn send_to(&self, request: SendToRequest){
@@ -106,10 +97,6 @@ impl NetworkManager {
             NetworkManagerMessage::BroadCastRequest(request) => self.send_broadcast(request),
             update => warn!("Unhandled update: {:?}", update),
         }
-    }
-
-    pub fn set_raft_engine_sender(&mut self, sender: Sender<Update>){
-        self.raft_engine_sender = Some(sender);
     }
 }
 

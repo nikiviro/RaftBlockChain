@@ -11,7 +11,8 @@ use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 pub struct Node{
     this_peer_port: u64,
     node_client: Sender<Update>,
-    node_receiver: Receiver<Update>
+    node_receiver: Receiver<Update>,
+    raft_engine_client: Option<Sender<Update>>
 }
 
 impl Node{
@@ -21,7 +22,8 @@ impl Node{
         Node{
             this_peer_port,
             node_client: tx,
-            node_receiver: rx
+            node_receiver: rx,
+            raft_engine_client: None
         }
     }
 
@@ -35,7 +37,7 @@ impl Node{
         };
 
         match raft_engine{
-            Some(ref engine ) =>  network_manager.set_raft_engine_sender(engine.raft_engine_client.clone()),
+            Some(ref engine ) =>  self.raft_engine_client = Some(engine.raft_engine_client.clone()),
             _ => {}
         }
 
@@ -76,7 +78,15 @@ impl Node{
                 Ok(update) => {
                     match update {
                         Update::BlockNew(block) => {
-                            println!("Received information about new block:{:?}",block)
+                            println!("Received information about new block:{:?}",block);
+                            if self.raft_engine_client.is_some(){
+                                self.raft_engine_client.as_ref().unwrap().send(Update::BlockNew(block));
+                            }
+                        },
+                        Update::RaftMessage(raft_message) => {
+                            if self.raft_engine_client.is_some(){
+                                self.raft_engine_client.as_ref().unwrap().send(Update::RaftMessage(raft_message));
+                            }
                         }
                         update => warn!("Unhandled update: {:?}", update),
                     }
