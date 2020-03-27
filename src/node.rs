@@ -1,8 +1,8 @@
 use crate::p2p::network_manager::NetworkManager;
-use crate::raft_engine::RaftEngine;
+use crate::raft_engine::{RaftEngine, RaftNodeMessage};
 use std::thread;
 use std::sync::{Mutex, mpsc};
-use crate::{Proposal, Update};
+use crate::{Proposal, Update, Blockchain};
 use std::collections::VecDeque;
 use raft::{prelude::*, StateRole};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
@@ -12,7 +12,8 @@ pub struct Node{
     this_peer_port: u64,
     node_client: Sender<Update>,
     node_receiver: Receiver<Update>,
-    raft_engine_client: Option<Sender<Update>>
+    raft_engine_client: Option<Sender<RaftNodeMessage>>,
+    pub blockchain: Blockchain,
 }
 
 impl Node{
@@ -23,7 +24,8 @@ impl Node{
             this_peer_port,
             node_client: tx,
             node_receiver: rx,
-            raft_engine_client: None
+            raft_engine_client: None,
+            blockchain: Blockchain::new(),
         }
     }
 
@@ -80,12 +82,12 @@ impl Node{
                         Update::BlockNew(block) => {
                             println!("Received information about new block:{:?}",block);
                             if self.raft_engine_client.is_some(){
-                                self.raft_engine_client.as_ref().unwrap().send(Update::BlockNew(block));
+                                self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::BlockNew(block));
                             }
                         },
                         Update::RaftMessage(raft_message) => {
                             if self.raft_engine_client.is_some(){
-                                self.raft_engine_client.as_ref().unwrap().send(Update::RaftMessage(raft_message));
+                                self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::RaftMessage(raft_message));
                             }
                         }
                         update => warn!("Unhandled update: {:?}", update),

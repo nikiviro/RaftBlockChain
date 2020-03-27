@@ -21,7 +21,7 @@ pub struct RaftNode {
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     pub blockchain: Blockchain,
     pub is_node_without_raft: bool,
-    pub is_changing_config: bool
+    pub is_changing_config: bool //TODO: Obsolete, remove!
 }
 
 impl RaftNode {
@@ -257,7 +257,7 @@ impl RaftNode {
 #[derive(Debug,Serialize, Deserialize)]
 pub enum Update {
     BlockNew(Block),
-    RaftMessage(RaftMessage),
+    RaftMessage(RaftMessage)
 }
 
 #[derive(Debug,Serialize, Deserialize)]

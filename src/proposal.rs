@@ -5,6 +5,7 @@ use raft::{prelude::*, StateRole};
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 
+#[derive(Debug)]
 pub struct Proposal {
     pub block: Option<Block>, // block id of block that should be proposed to nodes
     pub conf_change: Option<ConfChange>, // conf change.

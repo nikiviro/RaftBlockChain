@@ -1,5 +1,5 @@
 use std::sync::mpsc::{Receiver, TryRecvError, Sender};
-use crate::{Update, RaftNode, Proposal, Block, now};
+use crate::{Update, RaftNode, Proposal, Block, now, RaftMessage};
 use std::thread;
 use std::time::{Duration, Instant};
 use raft::storage::MemStorage;
@@ -16,8 +16,8 @@ pub struct RaftEngine {
     pub proposals_global: Arc<Mutex<VecDeque<Proposal>>>,
     pub conf_change_proposals_global: Arc<Mutex<VecDeque<Proposal>>>,
     network_manager_sender: Sender<NetworkManagerMessage>,
-    pub raft_engine_client: Sender<Update>,
-    raft_engine_receiver: Receiver<Update>
+    pub raft_engine_client: Sender<RaftNodeMessage>,
+    raft_engine_receiver: Receiver<RaftNodeMessage>
 }
 
 impl RaftEngine {
@@ -149,6 +149,14 @@ impl RaftEngine {
     }
 }
 
+#[derive(Debug)]
+pub enum RaftNodeMessage{
+    RaftMessage(RaftMessage),
+    RaftProposal(Proposal),
+    BlockNew(Block),
+}
+
+
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     let mut conf_change = ConfChange::default();
     conf_change.set_node_id(node_id);
@@ -161,10 +169,10 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
 }
 
 
-fn handle_update(raft_node: &mut RaftNode, update: Update) -> bool {
+fn handle_update(raft_node: &mut RaftNode, update: RaftNodeMessage) -> bool {
     match update {
-        Update::BlockNew(block) => raft_node.on_block_new(block),
-        Update::RaftMessage(message) => raft_node.on_raft_message(&message.content),
+        RaftNodeMessage::BlockNew(block) => raft_node.on_block_new(block),
+        RaftNodeMessage::RaftMessage(message) => raft_node.on_raft_message(&message.content),
         //Update::Shutdown => return false,
 
         update => warn!("Unhandled update: {:?}", update),
