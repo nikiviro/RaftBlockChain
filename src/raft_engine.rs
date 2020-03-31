@@ -13,7 +13,7 @@ pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(100);
 
 
 pub struct RaftEngine {
-    pub proposals_global: Arc<Mutex<VecDeque<Proposal>>>,
+    pub proposals_global: VecDeque<Proposal>,
     pub conf_change_proposals_global: Arc<Mutex<VecDeque<Proposal>>>,
     network_manager_sender: Sender<NetworkManagerMessage>,
     pub raft_engine_client: Sender<RaftNodeMessage>,
@@ -27,7 +27,7 @@ impl RaftEngine {
     ) -> Self{
         let (tx, rx) = mpsc::channel();
         RaftEngine {
-            proposals_global : Arc::new(Mutex::new(VecDeque::<Proposal>::new())),
+            proposals_global : VecDeque::<Proposal>::new(),
             conf_change_proposals_global: Arc::new(Mutex::new(VecDeque::<Proposal>::new())),
             network_manager_sender: network_manager,
             raft_engine_client: tx,
@@ -41,15 +41,11 @@ impl RaftEngine {
         is_leader: bool,
         peer_list: Vec<u64>
     ){
-
-        let proposals = Arc::clone(&self.proposals_global);
         let conf_change_proposals = Arc::clone(&self.conf_change_proposals_global);
 
         let mut t = Instant::now();
         let mut leader_stop_timer = Instant::now();
         let mut new_block_timer = Instant::now();
-
-        let mut proposal_responses = Vec::new();
 
         let mut raft_node = match is_leader {
             // Create node 1 as leader
@@ -94,8 +90,7 @@ impl RaftEngine {
             //TODO: Make sure that new block block will be proposed after previous block was finally committed/rejected by network
             if raft.raft.state == StateRole::Leader {
                 // Handle new proposals.
-                let mut proposals = proposals.lock().unwrap();
-                for p in proposals.iter_mut().skip_while(|p| p.proposed > 0) {
+                for p in self.proposals_global.iter_mut().skip_while(|p| p.proposed > 0) {
                     raft_node.propose(p);
                 }
                 let mut conf_change_proposals = conf_change_proposals.lock().unwrap();
@@ -118,8 +113,7 @@ impl RaftEngine {
                     println!("----------------------");
                     let new_block = Block::new(new_block_id, 1,1,0,"1".to_string(),now(), vec![0; 32], vec![0; 32], vec![0; 64]);
                     let (proposal, rx) = Proposal::new_block(new_block);
-                    proposal_responses.push(rx);
-                    proposals.push_back(proposal);
+                    self.proposals_global.push_back(proposal);
                     new_block_timer = Instant::now();
                 }
             }
@@ -142,9 +136,13 @@ impl RaftEngine {
                 thread::sleep(Duration::from_secs(30));
                 leader_stop_timer = Instant::now();
             }
-            raft_node.on_ready(&proposals, &conf_change_proposals);
+            raft_node.on_ready( &conf_change_proposals);
 
         }
+
+    }
+
+    pub fn propose_to_raft( &mut self, ){
 
     }
 }
@@ -166,6 +164,10 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     if rx.recv().unwrap() {
         println!("Node {:?} succesfully added to cluster", node_id);
     }
+}
+
+pub fn propose(raft_node: &mut RaftNode, update: RaftNodeMessage){
+
 }
 
 

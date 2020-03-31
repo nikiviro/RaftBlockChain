@@ -129,7 +129,6 @@ impl RaftNode {
 
     pub fn on_ready(
         &mut self,
-        proposals: &Mutex<VecDeque<Proposal>>,
         conf_change_proposals: &Mutex<VecDeque<Proposal>>,
     ) {
         let raw_node = match self.raw_node {
