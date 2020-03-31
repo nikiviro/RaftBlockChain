@@ -65,7 +65,7 @@ impl Node{
             if is_leader {
                 thread::spawn( move || {
                         for peer in peers_raft.iter() {
-                            add_new_raft_node(raft_conf_proposals.as_ref(), *peer);
+                            //add_new_raft_node(raft_conf_proposals.as_ref(), *peer);
                         }
                     }
                 );

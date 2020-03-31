@@ -13,6 +13,7 @@ pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest};
 use crate::now;
+use protobuf::reflect::ProtobufValue;
 
 pub struct RaftNode {
     // None if the raft is not initialized.
@@ -29,7 +30,7 @@ impl RaftNode {
     pub fn create_raft_leader(
         id: u64,
         network_manager: Sender<NetworkManagerMessage>,
-//        peers_list: Vec<u64>,
+        mut peers_list: Vec<u64>,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut cfg = Config {
@@ -39,9 +40,17 @@ impl RaftNode {
             tag: format!("raft_node{}", id),
             ..Default::default()
         };
+        peers_list.push(id);
+        let raft_peers: Vec<Peer> = peers_list
+            .iter()
+            .map(|id| Peer {
+                id: *id,
+                context: None,
+            })
+            .collect();
 
-        let storage = MemStorage::new_with_conf_state(ConfState::from((vec![id], vec![])));
-        let raft = Some(RawNode::new(&cfg, storage).unwrap());
+        let storage = MemStorage::default();
+        let raft = Some(RawNode::new(&cfg, storage, raft_peers).unwrap());
         RaftNode {
             id,
             raw_node: raft,
@@ -58,10 +67,25 @@ impl RaftNode {
         network_manager: Sender<NetworkManagerMessage>,
         is_node_without_raft: bool,
     ) -> Self {
+        let mut cfg = Config {
+            election_tick: 10,
+            heartbeat_tick: 3,
+            id: id,
+            tag: format!("raft_node{}", id),
+            ..Default::default()
+        };
+        let mut peer1 = Peer::default();
+        peer1.id = 4003;
+        let mut peer2 = Peer::default();
+        peer2.id = 4002;
+        let mut peer3 = Peer::default();
+        peer3.id = 4004;
+        let storage = MemStorage::default();
+        let raft = Some(RawNode::new(&cfg, storage, vec![peer1,peer2,peer3]).unwrap());
         //TODO: Load configuration from genesis/configuration block
         RaftNode {
             id,
-            raw_node: None,
+            raw_node: raft,
             network_manager_sender: network_manager,
             blockchain: Blockchain::new(),
             is_node_without_raft: is_node_without_raft,
@@ -94,7 +118,7 @@ impl RaftNode {
             ..Default::default()
         };
         let storage = MemStorage::new();
-        self.raw_node = Some(RawNode::new(&cfg, storage).unwrap());
+        self.raw_node = Some(RawNode::new(&cfg, storage, vec![]).unwrap());
     }
 
     pub fn start_node(&mut self) {
@@ -184,8 +208,11 @@ impl RaftNode {
                     cc.merge_from_bytes(&entry.data).unwrap();
                     let node_id = cc.get_node_id();
                     match cc.get_change_type() {
-                        ConfChangeType::AddNode => raw_node.raft.add_node(node_id).unwrap(),
-                        ConfChangeType::AddNode => raw_node.raft.add_node(node_id).unwrap(),
+                        ConfChangeType::AddNode => {
+                            if (entry.get_term() != 1){
+                                raw_node.raft.add_node(node_id).unwrap();
+                            }
+                        },
                         ConfChangeType::RemoveNode => raw_node.raft.remove_node(node_id).unwrap(),
                         ConfChangeType::AddLearnerNode => raw_node.raft.add_learner(node_id).unwrap(),
                         ConfChangeType::BeginMembershipChange
@@ -230,10 +257,9 @@ impl RaftNode {
 //                    }
                 }
             }
-            if let Some(last_committed) = committed_entries.last() {
-                let mut s = store.wl();
-                s.mut_hard_state().set_commit(last_committed.get_index());
-                s.mut_hard_state().set_term(last_committed.get_term());
+            if let Some(hs) = ready.hs() {
+                // Raft HardState changed, and we need to persist it.
+                raw_node.mut_store().wl().set_hardstate(hs.clone());
             }
 //            let  leader_id = raw_node.raft.leader_id;
 //            println!("Current leader : {} ",leader_id);

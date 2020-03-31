@@ -47,17 +47,11 @@ impl RaftEngine {
         let mut leader_stop_timer = Instant::now();
         let mut new_block_timer = Instant::now();
 
-        let mut raft_node = match is_leader {
-            // Create node 1 as leader
-            true => RaftNode::create_raft_leader(
-                raft_node_id,
-                self.network_manager_sender.clone()),
-            // Other nodes are followers.
-            _ => RaftNode::create_raft_follower(
-                raft_node_id,
-                self.network_manager_sender.clone(),
-                true)
-        };
+        let mut raft_node = RaftNode::create_raft_leader(
+            raft_node_id,
+            self.network_manager_sender.clone(),
+            peer_list
+        );
 
         loop {
             // Step raft messages.
