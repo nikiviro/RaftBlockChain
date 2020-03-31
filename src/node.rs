@@ -2,7 +2,7 @@ use crate::p2p::network_manager::NetworkManager;
 use crate::raft_engine::{RaftEngine, RaftNodeMessage};
 use std::thread;
 use std::sync::{Mutex, mpsc};
-use crate::{Proposal, Update, Blockchain};
+use crate::{Proposal, Update, Blockchain, Block, RaftMessage};
 use std::collections::VecDeque;
 use raft::{prelude::*, StateRole};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
@@ -10,8 +10,8 @@ use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 
 pub struct Node{
     this_peer_port: u64,
-    node_client: Sender<Update>,
-    node_receiver: Receiver<Update>,
+    node_client: Sender<NodeMessage>,
+    node_receiver: Receiver<NodeMessage>,
     raft_engine_client: Option<Sender<RaftNodeMessage>>,
     pub blockchain: Blockchain,
 }
@@ -52,7 +52,6 @@ impl Node{
 
         if(is_raft_node){
 
-            let test = raft_engine.is_some();
             let mut raft_engine = raft_engine.expect("Raft engine is not initialized");
             let raft_conf_proposals = raft_engine.conf_change_proposals_global.clone();
 
@@ -77,20 +76,20 @@ impl Node{
             match self.node_receiver.try_recv() {
                 Err(TryRecvError::Empty) => (),
                 Err(TryRecvError::Disconnected) => return,
-                Ok(update) => {
-                    match update {
-                        Update::BlockNew(block) => {
+                Ok(message) => {
+                    match message {
+                        NodeMessage::BlockNew(block) => {
                             println!("Received information about new block:{:?}",block);
                             if self.raft_engine_client.is_some(){
                                 self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::BlockNew(block));
                             }
                         },
-                        Update::RaftMessage(raft_message) => {
+                        NodeMessage::RaftMessage(raft_message) => {
                             if self.raft_engine_client.is_some(){
                                 self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::RaftMessage(raft_message));
                             }
                         }
-                        update => warn!("Unhandled update: {:?}", update),
+                        _ => warn!("Unhandled update: {:?}", message),
                     }
                     //debug!("Update: {:?}", update);
                 }
@@ -109,6 +108,12 @@ impl Node{
 //        handle.join();
 //
 //    }
+}
+
+#[derive(Debug,Serialize, Deserialize)]
+pub enum NodeMessage {
+    BlockNew(Block),
+    RaftMessage(RaftMessage)
 }
 
 fn add_new_raft_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {

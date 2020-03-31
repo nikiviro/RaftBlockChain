@@ -3,21 +3,22 @@ use std::collections::HashMap;
 use crate::p2p::peer::Peer;
 use zmq::{Context, Sendable};
 use std::thread;
-use crate::Update;
+use crate::{Update, Block, RaftMessage};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
 use std::sync::RwLock;
+use crate::node::NodeMessage;
 
 pub struct NetworkManager {
     pub peers: HashMap<u64, Peer>,
     pub zero_mq_context: Context,
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     network_manager_receiver: Receiver<NetworkManagerMessage>,
-    node_sender: Sender<Update>,
+    node_client: Sender<NodeMessage>,
 
 }
 
 impl NetworkManager {
-    pub fn new(node_sender: Sender<Update>) -> Self{
+    pub fn new(node_sender: Sender<NodeMessage>) -> Self{
         let (network_manager_sender, network_manager_receiver) = mpsc::channel();
 
         NetworkManager {
@@ -25,7 +26,7 @@ impl NetworkManager {
             zero_mq_context: Default::default(),
             network_manager_sender,
             network_manager_receiver,
-            node_sender: node_sender
+            node_client: node_sender
         }
     }
 
@@ -66,7 +67,7 @@ impl NetworkManager {
 
         //Create new thread in which we will listen for incoming zeromq messages from other peers
         //Received message will be forwarded through the channel to main thread
-        let node_sender = self.node_sender.clone();
+        let node_sender = self.node_client.clone();
         let receiver_thread_handle = thread::spawn( move ||
             loop {
                 let msq = router_socket.recv_multipart(0).unwrap();
@@ -74,9 +75,17 @@ impl NetworkManager {
                 //thread::sleep(Duration::from_millis(1000));
                 //responder.send("World", 0).unwrap();
                 let data = &msq[1];
-                let received_message: Update = bincode::deserialize(&data).expect("Cannot deserialize update message");
+                let received_message: NetworkMessage = bincode::deserialize(&data).expect("Cannot deserialize update message");
                 //zeromq_sender.send(received_message);
-                node_sender.send(received_message);
+                match received_message {
+                    NetworkMessage::BlockNew(block) => {
+                        node_sender.send(NodeMessage::BlockNew(block));
+                    },
+                    NetworkMessage::RaftMessage(raft_message) => {
+                        node_sender.send(NodeMessage::RaftMessage(raft_message));
+                    }
+                    _ => warn!("Unhandled network message received: {:?}", received_message),
+                }
             }
         );
     }
@@ -89,6 +98,10 @@ impl NetworkManager {
         for (id, peer) in self.peers.iter() {
             peer.socket.send(request.data.clone(),0);
         }
+    }
+
+    pub fn handle_receieved_message (&self, message: NetworkMessage){
+
     }
 
     pub fn process_request(&self, message: NetworkManagerMessage){
@@ -132,4 +145,10 @@ impl BroadCastRequest{
             data
         }
     }
+}
+
+#[derive(Debug,Serialize, Deserialize)]
+pub enum NetworkMessage{
+    BlockNew(Block),
+    RaftMessage(RaftMessage)
 }
