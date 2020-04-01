@@ -15,6 +15,7 @@ use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToR
 use crate::now;
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
+use crate::blockchain::block::BlockType;
 
 pub struct RaftNode {
     // None if the raft is not initialized.
@@ -108,7 +109,7 @@ impl RaftNode {
         let last_index1 = raw_node.raft.raft_log.last_index() + 1;
         if let Some( ref block) = proposal.block {
             //convert Block struct to bytes
-            let data = bincode::serialize(&block.block_id).unwrap();
+            let data = bincode::serialize(&block.header.block_id).unwrap();
             //let new_block_id = block.block_id;
             let _ = raw_node.propose(vec![], data);
         } else if let Some(ref cc) = proposal.conf_change {
@@ -202,7 +203,7 @@ impl RaftNode {
 
                     let block_id: u64 = bincode::deserialize(&entry.get_data()).unwrap();
                     if raw_node.raft.state == StateRole::Leader{
-                        let block = block::Block::new(block_id, 0, 0, 0, "".to_string(), now(), vec![0], vec![0], vec![0]);
+                        let block = block::Block::new(block_id, 1,BlockType::Normal,0,"1".to_string(),"1".to_string());
                         self.blockchain.add_block(block);
                         println!("Leader added new block: {:?}", self.blockchain.get_last_block());
                         println!("Node {} - Leader added new block at index {}",raw_node.raft.id, block_id);
@@ -239,7 +240,7 @@ impl RaftNode {
     }
 
     pub fn on_block_new(&mut self, block: Block) {
-        let block_id = block.block_id;
+        let block_id = block.header.block_id;
         self.blockchain.add_block(block);
         println!("Node {} added new block at index {}", self.id, block_id);
     }

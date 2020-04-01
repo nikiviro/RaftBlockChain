@@ -8,6 +8,7 @@ use raft::{prelude::*, StateRole};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::collections::VecDeque;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage};
+use crate::blockchain::block::BlockType;
 
 pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(50);
 
@@ -94,7 +95,7 @@ impl RaftEngine {
                     let mut new_block_id;
 
                     if let Some(last_block) = raft_node.blockchain.get_last_block() {
-                        new_block_id = last_block.block_id + 1;
+                        new_block_id = last_block.header.block_id + 1;
                     }else {
                         //First block - genesis
                         new_block_id = 1;
@@ -102,7 +103,7 @@ impl RaftEngine {
                     println!("----------------------");
                     println!("Adding new block - {}",new_block_id);
                     println!("----------------------");
-                    let new_block = Block::new(new_block_id, 1,1,0,"1".to_string(),now(), vec![0; 32], vec![0; 32], vec![0; 64]);
+                    let new_block = Block::new(new_block_id, 1,BlockType::Normal,0,"1".to_string(),"1".to_string());
                     let (proposal, rx) = Proposal::new_block(new_block);
                     self.proposals_global.push_back(proposal);
                     new_block_timer = Instant::now();
