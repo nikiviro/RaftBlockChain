@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::collections::VecDeque;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage};
 
-pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(10);
+pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(50);
 
 
 pub struct RaftEngine {

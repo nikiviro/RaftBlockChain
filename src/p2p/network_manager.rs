@@ -77,15 +77,8 @@ impl NetworkManager {
                 let data = &msq[1];
                 let received_message: NetworkMessage = bincode::deserialize(&data).expect("Cannot deserialize update message");
                 //zeromq_sender.send(received_message);
-                match received_message {
-                    NetworkMessage::BlockNew(block) => {
-                        node_sender.send(NodeMessage::BlockNew(block));
-                    },
-                    NetworkMessage::RaftMessage(raft_message) => {
-                        node_sender.send(NodeMessage::RaftMessage(raft_message));
-                    }
-                    _ => warn!("Unhandled network message received: {:?}", received_message),
-                }
+                handle_receieved_message(received_message, node_sender.clone());
+
             }
         );
     }
@@ -100,16 +93,25 @@ impl NetworkManager {
         }
     }
 
-    pub fn handle_receieved_message (&self, message: NetworkMessage){
-
-    }
-
     pub fn process_request(&self, message: NetworkManagerMessage){
         match message {
             NetworkManagerMessage::SendToRequest(request) => self.send_to(request),
             NetworkManagerMessage::BroadCastRequest(request) => self.send_broadcast(request),
             update => warn!("Unhandled update: {:?}", update),
         }
+    }
+}
+
+
+fn handle_receieved_message (received_message: NetworkMessage, node_client: Sender<NodeMessage>){
+    match received_message {
+        NetworkMessage::BlockNew(block) => {
+            node_client.send(NodeMessage::BlockNew(block));
+        },
+        NetworkMessage::RaftMessage(raft_message) => {
+            node_client.send(NodeMessage::RaftMessage(raft_message));
+        }
+        _ => warn!("Unhandled network message received: {:?}", received_message),
     }
 }
 

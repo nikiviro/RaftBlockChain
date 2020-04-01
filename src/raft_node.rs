@@ -35,7 +35,8 @@ impl RaftNode {
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut rng = rand::thread_rng();
-        let election_tick = rng.gen_range(10, 20);
+        let election_tick = rng.gen_range(30, 100);
+        println!("Election tick:{}",election_tick);
         let mut cfg = Config {
             election_tick: election_tick,
             heartbeat_tick: 3,
