@@ -14,6 +14,7 @@ use crate::proposal::Proposal;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest};
 use crate::now;
 use protobuf::reflect::ProtobufValue;
+use rand::prelude::*;
 
 pub struct RaftNode {
     // None if the raft is not initialized.
@@ -26,15 +27,17 @@ pub struct RaftNode {
 }
 
 impl RaftNode {
-    // Create a raft leader only with itself in its configuration.
-    pub fn create_raft_leader(
+    // Create a raft node with peers from config
+    pub fn new(
         id: u64,
         network_manager: Sender<NetworkManagerMessage>,
         mut peers_list: Vec<u64>,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
+        let mut rng = rand::thread_rng();
+        let election_tick = rng.gen_range(10, 20);
         let mut cfg = Config {
-            election_tick: 10,
+            election_tick: election_tick,
             heartbeat_tick: 3,
             id: id,
             tag: format!("raft_node{}", id),
@@ -61,38 +64,6 @@ impl RaftNode {
         }
     }
 
-    // Create a raft follower.
-    pub fn create_raft_follower(
-        id: u64,
-        network_manager: Sender<NetworkManagerMessage>,
-        is_node_without_raft: bool,
-    ) -> Self {
-        let mut cfg = Config {
-            election_tick: 10,
-            heartbeat_tick: 3,
-            id: id,
-            tag: format!("raft_node{}", id),
-            ..Default::default()
-        };
-        let mut peer1 = Peer::default();
-        peer1.id = 4003;
-        let mut peer2 = Peer::default();
-        peer2.id = 4002;
-        let mut peer3 = Peer::default();
-        peer3.id = 4004;
-        let storage = MemStorage::default();
-        let raft = Some(RawNode::new(&cfg, storage, vec![peer1,peer2,peer3]).unwrap());
-        //TODO: Load configuration from genesis/configuration block
-        RaftNode {
-            id,
-            raw_node: raft,
-            network_manager_sender: network_manager,
-            blockchain: Blockchain::new(),
-            is_node_without_raft: is_node_without_raft,
-            is_changing_config: false
-        }
-    }
-
     // Step a raft message, initialize the raft if need.
     pub fn step(&mut self, msg: Message) {
         if self.raw_node.is_none() {
@@ -106,6 +77,7 @@ impl RaftNode {
         let _ = raft.step(msg);
     }
 
+    //TODO: Remmove, not used after downgrade to raft 0.5.0
     pub fn initialize_raft_from_message(&mut self, msg: &Message) {
         if !is_initial_msg(msg) {
             return;
@@ -153,7 +125,6 @@ impl RaftNode {
 
     pub fn on_ready(
         &mut self,
-        conf_change_proposals: &Mutex<VecDeque<Proposal>>,
     ) {
         let raw_node = match self.raw_node {
             Some(ref mut r) => r,
@@ -203,6 +174,7 @@ impl RaftNode {
                     continue;
                 }
                 if let EntryType::EntryConfChange = entry.get_entry_type() {
+                    //TODO: Make sure that there is only on conf change proposal at time
                     // Handle conf change messages
                     let mut cc = ConfChange::default();
                     cc.merge_from_bytes(&entry.data).unwrap();
@@ -220,14 +192,6 @@ impl RaftNode {
                     }
                     let cs = ConfState::from(raw_node.raft.prs().configuration().clone());
                     store.wl().set_conf_state(cs, None);
-
-                    if raw_node.raft.state == StateRole::Leader {
-                        // The leader should response to the clients, tell them if their proposals
-                        // succeeded or not.
-                        let conf_change_proposals = conf_change_proposals.lock().unwrap().pop_front().unwrap();
-                        conf_change_proposals.propose_success.send(true).unwrap();
-                    }
-
 
                 }  else {
                     // For normal proposals, extract block from message
@@ -301,6 +265,7 @@ impl RaftMessage{
         }
     }
 }
+//TODO: Remmove, not used after downgrade to raft 0.5.0
 // The message can be used to initialize a raft node or not.
 fn is_initial_msg(msg: &Message) -> bool {
     let msg_type = msg.get_msg_type();

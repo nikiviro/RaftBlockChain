@@ -9,12 +9,12 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::collections::VecDeque;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage};
 
-pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(100);
+pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(10);
 
 
 pub struct RaftEngine {
     pub proposals_global: VecDeque<Proposal>,
-    pub conf_change_proposals_global: Arc<Mutex<VecDeque<Proposal>>>,
+    pub conf_change_proposals: VecDeque<Proposal>,
     network_manager_sender: Sender<NetworkManagerMessage>,
     pub raft_engine_client: Sender<RaftNodeMessage>,
     raft_engine_receiver: Receiver<RaftNodeMessage>
@@ -28,7 +28,7 @@ impl RaftEngine {
         let (tx, rx) = mpsc::channel();
         RaftEngine {
             proposals_global : VecDeque::<Proposal>::new(),
-            conf_change_proposals_global: Arc::new(Mutex::new(VecDeque::<Proposal>::new())),
+            conf_change_proposals: VecDeque::<Proposal>::new(),
             network_manager_sender: network_manager,
             raft_engine_client: tx,
             raft_engine_receiver: rx
@@ -41,13 +41,11 @@ impl RaftEngine {
         is_leader: bool,
         peer_list: Vec<u64>
     ){
-        let conf_change_proposals = Arc::clone(&self.conf_change_proposals_global);
-
         let mut t = Instant::now();
         let mut leader_stop_timer = Instant::now();
         let mut new_block_timer = Instant::now();
 
-        let mut raft_node = RaftNode::create_raft_leader(
+        let mut raft_node = RaftNode::new(
             raft_node_id,
             self.network_manager_sender.clone(),
             peer_list
@@ -87,8 +85,7 @@ impl RaftEngine {
                 for p in self.proposals_global.iter_mut().skip_while(|p| p.proposed > 0) {
                     raft_node.propose(p);
                 }
-                let mut conf_change_proposals = conf_change_proposals.lock().unwrap();
-                for p in conf_change_proposals.iter_mut().skip_while(|p| p.proposed > 0) {
+                for p in self.conf_change_proposals.iter_mut().skip_while(|p| p.proposed > 0) {
                     raft_node.propose(p);
                 }
 
@@ -130,7 +127,7 @@ impl RaftEngine {
                 thread::sleep(Duration::from_secs(30));
                 leader_stop_timer = Instant::now();
             }
-            raft_node.on_ready( &conf_change_proposals);
+            raft_node.on_ready();
 
         }
 
@@ -149,6 +146,7 @@ pub enum RaftNodeMessage{
 }
 
 
+//TODO: Remmove, not used after downgrade to raft 0.5.0
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     let mut conf_change = ConfChange::default();
     conf_change.set_node_id(node_id);

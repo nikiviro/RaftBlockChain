@@ -53,8 +53,6 @@ impl Node{
         if(is_raft_node){
 
             let mut raft_engine = raft_engine.expect("Raft engine is not initialized");
-            let raft_conf_proposals = raft_engine.conf_change_proposals_global.clone();
-
 
             let handle = thread::spawn( move || {
                 raft_engine.start(this_peer_port,is_leader,peers.clone());
@@ -62,14 +60,14 @@ impl Node{
 
             );
 
-            if is_leader {
-                thread::spawn( move || {
-                        for peer in peers_raft.iter() {
-                            //add_new_raft_node(raft_conf_proposals.as_ref(), *peer);
-                        }
-                    }
-                );
-            }
+            // if is_leader {
+            //     thread::spawn( move || {
+            //             for peer in peers_raft.iter() {
+            //                 //add_new_raft_node(raft_conf_proposals.as_ref(), *peer);
+            //             }
+            //         }
+            //     );
+            // }
         }
 
         loop{
