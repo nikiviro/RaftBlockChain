@@ -77,7 +77,7 @@ impl Node{
                 Ok(message) => {
                     match message {
                         NodeMessage::BlockNew(block) => {
-                            println!("Received information about new block:{:?}",block);
+                            println!("Received information about new block:{:?}, hash:{:?} ",block, block.hash());
                             if self.raft_engine_client.is_some(){
                                 self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::BlockNew(block));
                             }

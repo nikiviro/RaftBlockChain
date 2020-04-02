@@ -1,5 +1,7 @@
 use std::fmt::{self, Debug, Formatter};
 use std::time::SystemTime;
+use crypto::sha2::Sha256;
+use crypto::digest::Digest;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
@@ -48,6 +50,17 @@ impl Block {
                                      prev_block_hash,block_hash),
             block_body: block_body
         }
+    }
+
+    pub fn hash(&self) -> String{
+        let data = bincode::serialize(&self.header).expect("Error while serializing Update (New block) RaftMessage");
+        let mut hasher = Sha256::new();
+
+        // write input message
+        hasher.input(&data);
+
+        // read hash digest
+        hasher.result_str()
     }
 }
 
