@@ -52,6 +52,15 @@ impl Block {
         }
     }
 
+    pub fn genessis(elector_nodes: Vec<u64>, leader_id: u64) -> Self{
+        Block {
+            header: BlockHeader::new(1,1,
+                                     BlockType::Config,0,
+                                     "1".to_string(),"1".to_string()),
+            block_body: BlockBody::Config(ConfiglBlockBody::new(elector_nodes,leader_id))
+        }
+    }
+
     pub fn hash(&self) -> String{
         let data = bincode::serialize(&self.header).expect("Error while serializing Update (New block) RaftMessage");
         let mut hasher = Sha256::new();
@@ -97,13 +106,24 @@ impl Default for NormalBlockBody {
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfiglBlockBody{
-    pub list_of_nodes: Vec<u64>
+    pub list_of_elector_nodes: Vec<u64>,
+    pub current_leader_id: u64
+}
+
+impl ConfiglBlockBody{
+    pub fn new(list_of_elector_nodes: Vec<u64>, current_leader_id: u64) -> Self {
+        ConfiglBlockBody{
+            list_of_elector_nodes,
+            current_leader_id
+        }
+    }
 }
 
 impl Default for ConfiglBlockBody {
     fn default() -> ConfiglBlockBody {
         ConfiglBlockBody{
-            list_of_nodes: vec![]
+            list_of_elector_nodes: vec![],
+            current_leader_id: 0
         }
     }
 }

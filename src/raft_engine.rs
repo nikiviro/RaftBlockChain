@@ -49,7 +49,7 @@ impl RaftEngine {
         let mut raft_node = RaftNode::new(
             raft_node_id,
             self.network_manager_sender.clone(),
-            peer_list
+            peer_list.clone()
         );
 
         loop {
@@ -93,17 +93,19 @@ impl RaftEngine {
                 //Add new Block
                 if new_block_timer.elapsed() >= Duration::from_secs(20) {
                     let mut new_block_id;
-
+                    let new_block;
                     if let Some(last_block) = raft_node.blockchain.get_last_block() {
                         new_block_id = last_block.header.block_id + 1;
+                        new_block = Block::new(new_block_id, 1,BlockType::Normal,0,"1".to_string(),"1".to_string());
+
                     }else {
                         //First block - genesis
                         new_block_id = 1;
+                        new_block = Block::genessis(peer_list.clone(), raft_node_id)
                     }
                     println!("----------------------");
                     println!("Adding new block - {}",new_block_id);
                     println!("----------------------");
-                    let new_block = Block::new(new_block_id, 1,BlockType::Normal,0,"1".to_string(),"1".to_string());
                     let (proposal, rx) = Proposal::new_block(new_block);
                     self.proposals_global.push_back(proposal);
                     new_block_timer = Instant::now();
