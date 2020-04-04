@@ -45,12 +45,11 @@ impl NetworkManager {
         self.listen(this_peer_port);
 
         loop {
-            // Step raft messages.
             match self.network_manager_receiver.try_recv() {
                 Err(TryRecvError::Empty) => (),
                 Err(TryRecvError::Disconnected) => return,
                 Ok(message) => {
-                    debug!("Update: {:?}", message);
+                    debug!("NetworkManagerMessage received: {:?}", message);
                     self.process_request(message);
                 }
             }
