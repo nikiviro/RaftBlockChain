@@ -62,12 +62,22 @@ impl Block {
     }
 
     pub fn hash(&self) -> String{
-        let data = bincode::serialize(&self.header).expect("Error while serializing Update (New block) RaftMessage");
-        let mut hasher = Sha256::new();
 
+        let mut data = vec![];
+        //Get bytes from header
+        data.extend( bincode::serialize(&self.header.block_id).expect("Error while serializing block_id"));
+        data.extend( bincode::serialize(&self.header.block_type).expect("Error while serializing block_type"));
+        data.extend( bincode::serialize(&self.header.timestamp).expect("Error while serializing timestamp"));
+        data.extend( bincode::serialize(&self.header.epoch_seq_num).expect("Error while serializing epoch_seq_num"));
+        data.extend( bincode::serialize(&self.header.prev_block_hash).expect("Error while serializing prev_block_hash"));
+        data.extend( bincode::serialize(&self.header.prev_block_size).expect("Error while serializing prev_block_size"));
+
+        //Get bytes from block body
+        data.extend( bincode::serialize(&self.block_body).expect("Error while serializing block_body"));
+
+        let mut hasher = Sha256::new();
         // write input message
         hasher.input(&data);
-
         // read hash digest
         hasher.result_str()
     }
