@@ -96,7 +96,7 @@ impl RaftEngine {
                     let new_block;
                     if let Some(last_block) = raft_node.blockchain.get_last_block() {
                         new_block_id = last_block.header.block_id + 1;
-                        new_block = Block::new(new_block_id, 1,BlockType::Normal,0,"1".to_string(),"1".to_string());
+                        new_block = Block::new(new_block_id, 1,BlockType::Normal,0,"1".to_string());
 
                     }else {
                         //First block - genesis

@@ -204,7 +204,7 @@ impl RaftNode {
                     let block_id: u64 = bincode::deserialize(&entry.get_data()).unwrap();
                     if raw_node.raft.state == StateRole::Leader{
                         //TODO: Do not create new block, but load it from uncommited block que
-                        let block = block::Block::new(block_id, 1,BlockType::Normal,0,"1".to_string(),"1".to_string());
+                        let block = block::Block::new(block_id, 1,BlockType::Normal,0,"1".to_string());
                         self.blockchain.add_block(block);
                         println!("Leader added new block: {:?}", self.blockchain.get_last_block());
                         println!("Node {} - Leader added new block at index {}",raw_node.raft.id, block_id);

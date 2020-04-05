@@ -15,14 +15,15 @@ pub struct BlockHeader{
     pub block_id: u64,
     pub epoch_seq_num: u64, // Every block has its sequence number in epoch
     pub block_type: BlockType, //Type of block (Normal, Configuration ..)
-    pub block_size: u64, // Size of this block in bytes
     pub prev_block_size: u64, //Size of previous block in bytes
     //pub color_id: String, // Identification of color and its space this block belongs to
     pub timestamp: u128,
     pub prev_block_hash: String,
     //TODO: Move this to trailer
     //Trailer - This will not be hashed
-    pub block_hash: String,
+    //pub block_hash: String,
+    //pub block_size: u64, // Size of this block in bytes
+
 
 }
 
@@ -39,7 +40,7 @@ impl Debug for Block {
 impl Block {
 
     pub fn new (block_id: u64, epoch_seq_num: u64, block_type: BlockType, prev_block_size: u64,
-                prev_block_hash: String, block_hash: String) -> Self {
+                prev_block_hash: String) -> Self {
         let block_body = match block_type {
             BlockType::Normal => BlockBody::Normal(NormalBlockBody::default()),
             BlockType::Config => BlockBody::Config(ConfiglBlockBody::default()),
@@ -47,8 +48,8 @@ impl Block {
         Block {
             header: BlockHeader::new(block_id,epoch_seq_num,
                                      block_type,prev_block_size,
-                                     prev_block_hash,block_hash),
-            block_body: block_body
+                                     prev_block_hash),
+            block_body: block_boadded new block at indexdy
         }
     }
 
@@ -56,25 +57,14 @@ impl Block {
         Block {
             header: BlockHeader::new(1,1,
                                      BlockType::Config,0,
-                                     "1".to_string(),"1".to_string()),
+                                     "1".to_string()),
             block_body: BlockBody::Config(ConfiglBlockBody::new(elector_nodes,leader_id))
         }
     }
 
     pub fn hash(&self) -> String{
-
-        let mut data = vec![];
-        //Get bytes from header
-        data.extend( bincode::serialize(&self.header.block_id).expect("Error while serializing block_id"));
-        data.extend( bincode::serialize(&self.header.block_type).expect("Error while serializing block_type"));
-        data.extend( bincode::serialize(&self.header.timestamp).expect("Error while serializing timestamp"));
-        data.extend( bincode::serialize(&self.header.epoch_seq_num).expect("Error while serializing epoch_seq_num"));
-        data.extend( bincode::serialize(&self.header.prev_block_hash).expect("Error while serializing prev_block_hash"));
-        data.extend( bincode::serialize(&self.header.prev_block_size).expect("Error while serializing prev_block_size"));
-
-        //Get bytes from block body
-        data.extend( bincode::serialize(&self.block_body).expect("Error while serializing block_body"));
-
+        //Get block bytes
+        let mut data = bincode::serialize(&self).expect("Error while serializing block");
         let mut hasher = Sha256::new();
         // write input message
         hasher.input(&data);
@@ -86,18 +76,16 @@ impl Block {
 impl BlockHeader {
 
     pub fn new (block_id: u64, epoch_seq_num: u64, block_type: BlockType, prev_block_size: u64,
-                prev_block_hash: String, block_hash: String) -> Self
+                prev_block_hash: String) -> Self
     {
         BlockHeader {
             block_id: block_id,
             epoch_seq_num: epoch_seq_num,
             block_type: block_type,
             prev_block_size: prev_block_size,
-            block_size: 0,
             timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)
                 .expect("Time went backwards").as_secs() as u128,
-            prev_block_hash: prev_block_hash,
-            block_hash: block_hash
+            prev_block_hash: prev_block_hash
         }
     }
 }
