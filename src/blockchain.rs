@@ -18,7 +18,7 @@ impl Blockchain {
         self.blocks.push(block);
     }
 
-    pub fn get_last_block(&mut self) -> Option<Block> {
+    pub fn get_last_block(& self) -> Option<Block> {
         self.blocks.last().cloned()
     }
 }
