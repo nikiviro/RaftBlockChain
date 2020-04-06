@@ -1,5 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
 
 use prost::Message as ProstMsg;
@@ -22,7 +22,7 @@ pub struct RaftNode {
     pub id: u64,
     pub raw_node: Option<RawNode<MemStorage>>,
     pub network_manager_sender: Sender<NetworkManagerMessage>,
-    pub blockchain: Blockchain,
+    pub blockchain: Arc<RwLock<Blockchain>>,
     pub is_node_without_raft: bool,
     pub is_changing_config: bool //TODO: Obsolete, remove!
 }
@@ -33,6 +33,7 @@ impl RaftNode {
         id: u64,
         network_manager: Sender<NetworkManagerMessage>,
         mut peers_list: Vec<u64>,
+        block_chain: Arc<RwLock<Blockchain>>
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut rng = rand::thread_rng();
@@ -60,7 +61,7 @@ impl RaftNode {
             id,
             raw_node: raft,
             network_manager_sender: network_manager,
-            blockchain: Blockchain::new(),
+            blockchain: block_chain,
             is_node_without_raft: false,
             is_changing_config: false
         }
@@ -168,6 +169,8 @@ impl RaftNode {
             self.network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(to, data)));
         }
 
+        let mut block_chain = self.blockchain.write().expect("BlockChain Lock is poisoned");
+
         // Apply all committed proposals.
         if let Some(committed_entries) = ready.committed_entries.take() {
             for entry in &committed_entries {
@@ -205,11 +208,11 @@ impl RaftNode {
                     if raw_node.raft.state == StateRole::Leader{
                         //TODO: Do not create new block, but load it from uncommited block que
                         let block = block::Block::new(block_id, 1,BlockType::Normal,0,"1".to_string());
-                        self.blockchain.add_block(block);
-                        println!("Leader added new block: {:?}", self.blockchain.get_last_block());
+                        block_chain.add_block(block);
+                        println!("Leader added new block: {:?}", block_chain.get_last_block());
                         println!("Node {} - Leader added new block at index {}",raw_node.raft.id, block_id);
 
-                        let message_to_send = Update::BlockNew(self.blockchain.get_last_block().unwrap());
+                        let message_to_send = Update::BlockNew(block_chain.get_last_block().unwrap());
                         let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
 
                         self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
@@ -242,7 +245,7 @@ impl RaftNode {
 
     pub fn on_block_new(&mut self, block: Block) {
         let block_id = block.header.block_id;
-        self.blockchain.add_block(block);
+        self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
         println!("Node {} added new block at index {}", self.id, block_id);
     }
 }

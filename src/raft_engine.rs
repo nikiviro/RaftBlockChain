@@ -9,6 +9,8 @@ use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::collections::VecDeque;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage};
 use crate::blockchain::block::BlockType;
+use crate::Blockchain;
+
 
 pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(50);
 
@@ -18,13 +20,15 @@ pub struct RaftEngine {
     pub conf_change_proposals: VecDeque<Proposal>,
     network_manager_sender: Sender<NetworkManagerMessage>,
     pub raft_engine_client: Sender<RaftNodeMessage>,
-    raft_engine_receiver: Receiver<RaftNodeMessage>
+    raft_engine_receiver: Receiver<RaftNodeMessage>,
+    raft_node_id: u64,
 }
 
 impl RaftEngine {
 
     pub fn new(
-        network_manager: Sender<NetworkManagerMessage>
+        network_manager: Sender<NetworkManagerMessage>,
+        raft_node_id: u64
     ) -> Self{
         let (tx, rx) = mpsc::channel();
         RaftEngine {
@@ -32,24 +36,25 @@ impl RaftEngine {
             conf_change_proposals: VecDeque::<Proposal>::new(),
             network_manager_sender: network_manager,
             raft_engine_client: tx,
-            raft_engine_receiver: rx
+            raft_engine_receiver: rx,
+            raft_node_id: raft_node_id,
         }
     }
 
     pub fn start(
         &mut self,
-        raft_node_id: u64,
         is_leader: bool,
-        peer_list: Vec<u64>
+        peer_list: Vec<u64>,
+        mut block_chain: Arc<RwLock<Blockchain>>,
     ){
         let mut t = Instant::now();
         let mut leader_stop_timer = Instant::now();
         let mut new_block_timer = Instant::now();
 
         let mut raft_node = RaftNode::new(
-            raft_node_id,
+            self.raft_node_id,
             self.network_manager_sender.clone(),
-            peer_list.clone()
+            peer_list.clone(), block_chain.clone()
         );
 
         loop {
@@ -59,7 +64,7 @@ impl RaftEngine {
                 Err(TryRecvError::Disconnected) => return,
                 Ok(update) => {
                     debug!("Update: {:?}", update);
-                    handle_update( &mut raft_node,update);
+                    self.handle_update( &mut raft_node,block_chain.clone(), update);
                 }
 
             }
@@ -94,14 +99,14 @@ impl RaftEngine {
                 if new_block_timer.elapsed() >= Duration::from_secs(20) {
                     let mut new_block_id;
                     let new_block;
-                    if let Some(last_block) = raft_node.blockchain.get_last_block() {
+                    if let Some(last_block) = block_chain.read().expect("BlockChain Lock is poisoned").get_last_block() {
                         new_block_id = last_block.header.block_id + 1;
                         new_block = Block::new(new_block_id, 1,BlockType::Normal,0,"1".to_string());
 
                     }else {
                         //First block - genesis
                         new_block_id = 1;
-                        new_block = Block::genessis(peer_list.clone(), raft_node_id)
+                        new_block = Block::genessis(peer_list.clone(), self.raft_node_id)
                     }
                     println!("----------------------");
                     println!("Adding new block - {}",new_block_id);
@@ -125,7 +130,7 @@ impl RaftEngine {
             }
             //if node is Leader for longer then 60 seconds - sleep node threed, new leader should
             //be elected and after wake up this node should catch current log and blockchain state
-            if x.raft.state == StateRole::Leader && raft_node.blockchain.blocks.len() >3 && leader_stop_timer.elapsed() >= Duration::from_secs(60){
+            if x.raft.state == StateRole::Leader && block_chain.read().expect("BlockChain Lock is poisoned").blocks.len() >3 && leader_stop_timer.elapsed() >= Duration::from_secs(60){
                 print!("Leader {:?} is going to sleep for 60 seconds - new election should be held.\n", x.raft.id);
                 thread::sleep(Duration::from_secs(30));
                 leader_stop_timer = Instant::now();
@@ -134,6 +139,23 @@ impl RaftEngine {
 
         }
 
+    }
+
+    pub fn on_block_new(&self, block_chain: Arc<RwLock<Blockchain>>, block: Block) {
+        let block_id = block.header.block_id;
+        block_chain.write().expect("Blockchain is poisoned").add_block(block);
+        println!("Node {} added new block at index {}", self.raft_node_id, block_id);
+    }
+
+    fn handle_update(&self, raft_node: &mut RaftNode, block_chain: Arc<RwLock<Blockchain>>,update: RaftNodeMessage) -> bool {
+        match update {
+            RaftNodeMessage::BlockNew(block) => self.on_block_new(block_chain, block),
+            RaftNodeMessage::RaftMessage(message) => raft_node.on_raft_message(&message.content),
+            //Update::Shutdown => return false,
+
+            update => warn!("Unhandled update: {:?}", update),
+        }
+        true
     }
 
     pub fn propose_to_raft( &mut self, ){
@@ -166,16 +188,8 @@ pub fn propose(raft_node: &mut RaftNode, update: RaftNodeMessage){
 }
 
 
-fn handle_update(raft_node: &mut RaftNode, update: RaftNodeMessage) -> bool {
-    match update {
-        RaftNodeMessage::BlockNew(block) => raft_node.on_block_new(block),
-        RaftNodeMessage::RaftMessage(message) => raft_node.on_raft_message(&message.content),
-        //Update::Shutdown => return false,
 
-        update => warn!("Unhandled update: {:?}", update),
-    }
-    true
-}
+
 
 
 

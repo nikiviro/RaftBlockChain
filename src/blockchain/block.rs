@@ -49,7 +49,7 @@ impl Block {
             header: BlockHeader::new(block_id,epoch_seq_num,
                                      block_type,prev_block_size,
                                      prev_block_hash),
-            block_body: block_boadded new block at indexdy
+            block_body: block_body
         }
     }
 
