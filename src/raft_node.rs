@@ -24,7 +24,7 @@ pub struct RaftNode {
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub is_node_without_raft: bool,
-    pub is_changing_config: bool //TODO: Obsolete, remove!
+    pub uncommited_block_queue: HashMap<u64, Block>
 }
 
 impl RaftNode {
@@ -63,7 +63,7 @@ impl RaftNode {
             network_manager_sender: network_manager,
             blockchain: block_chain,
             is_node_without_raft: false,
-            is_changing_config: false
+            uncommited_block_queue: HashMap::new()
         }
     }
 
@@ -245,6 +245,7 @@ impl RaftNode {
 
     pub fn on_block_new(&mut self, block: Block) {
         let block_id = block.header.block_id;
+        self.uncommited_block_queue.insert(block_id.clone(), block.clone());
         self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
         println!("Node {} added new block at index {}", self.id, block_id);
     }

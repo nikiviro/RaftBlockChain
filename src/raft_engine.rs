@@ -64,7 +64,7 @@ impl RaftEngine {
                 Err(TryRecvError::Disconnected) => return,
                 Ok(update) => {
                     debug!("Update: {:?}", update);
-                    self.handle_update( &mut raft_node,block_chain.clone(), update);
+                    self.handle_update( &mut raft_node, update);
                 }
 
             }
@@ -111,8 +111,9 @@ impl RaftEngine {
                     println!("----------------------");
                     println!("Adding new block - {}",new_block_id);
                     println!("----------------------");
-                    let (proposal, rx) = Proposal::new_block(new_block);
+                    let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
+                    raft_node.uncommited_block_queue.insert(new_block_id, new_block.clone());
                     new_block_timer = Instant::now();
                 }
             }
@@ -147,9 +148,9 @@ impl RaftEngine {
         println!("Node {} added new block at index {}", self.raft_node_id, block_id);
     }
 
-    fn handle_update(&self, raft_node: &mut RaftNode, block_chain: Arc<RwLock<Blockchain>>,update: RaftNodeMessage) -> bool {
+    fn handle_update(&self, raft_node: &mut RaftNode, update: RaftNodeMessage) -> bool {
         match update {
-            RaftNodeMessage::BlockNew(block) => self.on_block_new(block_chain, block),
+            RaftNodeMessage::BlockNew(block) => raft_node.on_block_new( block),
             RaftNodeMessage::RaftMessage(message) => raft_node.on_raft_message(&message.content),
             //Update::Shutdown => return false,
 
