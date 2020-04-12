@@ -108,12 +108,12 @@ impl RaftEngine {
                         new_block_id = 1;
                         new_block = Block::genessis(peer_list.clone(), self.raft_node_id)
                     }
-                    println!("----------------------");
-                    println!("Adding new block - {}",new_block_id);
-                    println!("----------------------");
+                    println!("| ---------------------- |");
+                    println!("| Created new block - {} |",new_block_id);
+                    println!("| ---------------------- |");
                     let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
-                    raft_node.uncommited_block_queue.insert(new_block_id, new_block.clone());
+                    raft_node.uncommited_block_queue.insert(new_block.hash(), new_block.clone());
                     new_block_timer = Instant::now();
                 }
             }
@@ -132,7 +132,7 @@ impl RaftEngine {
             //if node is Leader for longer then 60 seconds - sleep node threed, new leader should
             //be elected and after wake up this node should catch current log and blockchain state
             if x.raft.state == StateRole::Leader && block_chain.read().expect("BlockChain Lock is poisoned").blocks.len() >3 && leader_stop_timer.elapsed() >= Duration::from_secs(60){
-                print!("Leader {:?} is going to sleep for 60 seconds - new election should be held.\n", x.raft.id);
+                info!("[SLEEP] Leader {:?} is going to sleep for 60 seconds - new election should be held.\n", x.raft.id);
                 thread::sleep(Duration::from_secs(30));
                 leader_stop_timer = Instant::now();
             }
