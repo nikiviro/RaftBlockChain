@@ -90,6 +90,7 @@ impl RaftNode {
             heartbeat_tick: 3,
             id: msg.get_to(),
             tag: format!("raft_node{}", msg.get_to()),
+            pre_vote: true,
             ..Default::default()
         };
         let storage = MemStorage::new();
