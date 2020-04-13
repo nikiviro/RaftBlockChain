@@ -42,7 +42,10 @@ impl Block {
     pub fn new (block_id: u64, epoch_seq_num: u64, block_type: BlockType, prev_block_size: u64,
                 prev_block_hash: String) -> Self {
         let block_body = match block_type {
-            BlockType::Normal => BlockBody::Normal(NormalBlockBody::default()),
+            BlockType::Normal => {
+                let block_body_string = format!("{}{}","This is block with id ".to_string(), block_id.to_string());
+                BlockBody::Normal(NormalBlockBody::new(block_body_string))
+            },
             BlockType::Config => BlockBody::Config(ConfiglBlockBody::default()),
         };
         Block {
@@ -93,6 +96,14 @@ impl BlockHeader {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NormalBlockBody{
     pub text: String
+}
+
+impl NormalBlockBody{
+    pub fn new(text: String) -> Self {
+        NormalBlockBody{
+            text
+        }
+    }
 }
 
 impl Default for NormalBlockBody {
