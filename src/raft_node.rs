@@ -24,7 +24,7 @@ pub struct RaftNode {
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub is_node_without_raft: bool,
-    pub uncommited_block_queue: HashMap<u64, Block>
+    pub uncommited_block_queue: HashMap<String, Block>
 }
 
 impl RaftNode {
@@ -44,6 +44,7 @@ impl RaftNode {
             heartbeat_tick: 3,
             id: id,
             tag: format!("raft_node{}", id),
+            pre_vote: true,
             ..Default::default()
         };
         peers_list.push(id);
@@ -110,8 +111,10 @@ impl RaftNode {
 
         let last_index1 = raw_node.raft.raft_log.last_index() + 1;
         if let Some( ref block) = proposal.block {
+            //TODO: Add block_hash field to Block struct, so we will dont need to hash block each time we need hash.
+            let raft_log_entry: RaftLogEntry = RaftLogEntry::new(block.header.block_id, block.hash());
             //convert Block struct to bytes
-            let data = bincode::serialize(&block.header.block_id).unwrap();
+            let data = bincode::serialize(&raft_log_entry).unwrap();
             //let new_block_id = block.block_id;
             let _ = raw_node.propose(vec![], data);
         } else if let Some(ref cc) = proposal.conf_change {
@@ -162,7 +165,7 @@ impl RaftNode {
 
         // Send out the messages come from the node.
         for msg in ready.messages.drain(..) {
-            //print!("Sending message:{:?}",msg);
+            //info!("Sending message:{:?}",msg);
             let to = msg.get_to();
             let message_to_send = Update::RaftMessage(RaftMessage::new(msg));
             let data = bincode::serialize(&message_to_send).expect("Error while serializing Update RaftMessage");
@@ -205,19 +208,47 @@ impl RaftNode {
                     //  - insert block into the blockchain
                     //  - announce new block to network
 
-                    let block_id: u64 = bincode::deserialize(&entry.get_data()).unwrap();
+                    let raft_log_entry :RaftLogEntry = bincode::deserialize(&entry.get_data()).unwrap();
                     if raw_node.raft.state == StateRole::Leader{
                         //TODO: Do not create new block, but load it from uncommited block que
-                        let block = block::Block::new(block_id, 1,BlockType::Normal,0,"1".to_string());
-                        block_chain.add_block(block);
-                        println!("Leader added new block: {:?}", block_chain.get_last_block());
-                        println!("Node {} - Leader added new block at index {}",raw_node.raft.id, block_id);
+                        if self.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
+                            match self.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
+                                Some(block) => {
+                                    block_chain.add_block(block.clone());
+                                    info!("[BLOCK COMMITED] Leader added new block: {:?}", block_chain.get_last_block());
+                                    info!("[BLOCK COMMITED ]Node {} - Leader added new block with id {}",raw_node.raft.id, block.header.block_id);
 
-                        let message_to_send = Update::BlockNew(block_chain.get_last_block().unwrap());
-                        let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
+                                    let message_to_send = Update::BlockNew(block_chain.get_last_block().unwrap());
+                                    let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
 
-                        self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
+                                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
+                                },
+                                None => panic!("Raft leader commited block which is not in its uncommitted block que!")
+                            }
+                        }
+                        else{
+                            panic!("Raft leader commited block which is not in its uncommitted block que!");
+                        }
+                    }
+                    else{
+                        if self.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
+                            match self.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
+                                Some(block) => {
+                                    block_chain.add_block(block.clone());
+                                    info!("[BLOCK COMMITED] Follower added new block: {:?}", block_chain.get_last_block());
+                                    info!("[BLOCK COMMITED ]Node {} - Follower added new block with id {}",raw_node.raft.id, block.header.block_id);
 
+                                    let message_to_send = Update::BlockNew(block_chain.get_last_block().unwrap());
+                                    let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
+
+                                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
+                                },
+                                None => panic!("Raft follower commited block which is not in its uncommitted block que!")
+                            }
+                        }
+                        else{
+                            info!("[DONT HAVE COMMITED BLOCK] Raft follower commited block which is not in its uncommitted block que!");
+                        }
                     }
 //                    //let block_index = block.block_id;
 //                    let node_role;
@@ -246,9 +277,10 @@ impl RaftNode {
 
     pub fn on_block_new(&mut self, block: Block) {
         let block_id = block.header.block_id;
-        self.uncommited_block_queue.insert(block_id.clone(), block.clone());
-        self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
-        println!("Node {} added new block at index {}", self.id, block_id);
+        let block_hash = block.hash();
+        self.uncommited_block_queue.insert(block_hash, block.clone());
+        //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
+        info!("[RECEIVED BLOCK] Node {} received new block with id {}, block was added to uncommitted block que", self.id, block_id);
     }
 }
 #[derive(Debug,Serialize, Deserialize)]
@@ -273,6 +305,22 @@ impl RaftMessage{
         }
     }
 }
+
+#[derive(Debug,Serialize, Deserialize)]
+pub struct RaftLogEntry{
+    pub block_id: u64,
+    pub block_hash: String
+}
+
+impl RaftLogEntry{
+    pub fn new( block_id: u64, block_hash: String) -> Self{
+        RaftLogEntry{
+            block_id,
+            block_hash
+        }
+    }
+}
+
 //TODO: Remmove, not used after downgrade to raft 0.5.0
 // The message can be used to initialize a raft node or not.
 fn is_initial_msg(msg: &Message) -> bool {
