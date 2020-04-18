@@ -49,7 +49,7 @@ impl NetworkManager {
                 Err(TryRecvError::Empty) => (),
                 Err(TryRecvError::Disconnected) => return,
                 Ok(message) => {
-                    debug!("NetworkManagerMessage received: {:?}", message);
+                    //debug!("NetworkManagerMessage received: {:?}", message);
                     self.process_request(message);
                 }
             }

@@ -29,10 +29,11 @@ pub struct BlockHeader{
 
 impl Debug for Block {
     fn fmt (&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "Block[{}], at: {}, type: {}",
+        write!(f, "Block-id[{}], at: {}, type: {}, hash: {} ...",
                &self.header.block_id,
                &self.header.timestamp,
-               &self.header.block_type
+               &self.header.block_type,
+               &self.hash()[0..5]
         )
     }
 }

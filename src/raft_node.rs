@@ -209,25 +209,26 @@ impl RaftNode {
                     //  - announce new block to network
 
                     let raft_log_entry :RaftLogEntry = bincode::deserialize(&entry.get_data()).unwrap();
+
                     if raw_node.raft.state == StateRole::Leader{
                         //TODO: Do not create new block, but load it from uncommited block que
                         if self.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
                             match self.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
                                 Some(block) => {
                                     block_chain.add_block(block.clone());
-                                    info!("[BLOCK COMMITED] Leader added new block: {:?}", block_chain.get_last_block());
-                                    info!("[BLOCK COMMITED ]Node {} - Leader added new block with id {}",raw_node.raft.id, block.header.block_id);
+                                    info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
 
                                     let message_to_send = Update::BlockNew(block_chain.get_last_block().unwrap());
                                     let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
 
                                     self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
                                 },
-                                None => panic!("Raft leader commited block which is not in its uncommitted block que!")
+                                None => panic!("Raft leader committed block which is not in its uncommitted block que!")
                             }
                         }
                         else{
-                            panic!("Raft leader commited block which is not in its uncommitted block que!");
+                            //Leader must have committed block in uncommitted block que, because block was created by this leader
+                            panic!("Raft leader committed block which is not in its uncommitted block que!");
                         }
                     }
                     else{
@@ -235,19 +236,17 @@ impl RaftNode {
                             match self.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
                                 Some(block) => {
                                     block_chain.add_block(block.clone());
-                                    info!("[BLOCK COMMITED] Follower added new block: {:?}", block_chain.get_last_block());
-                                    info!("[BLOCK COMMITED ]Node {} - Follower added new block with id {}",raw_node.raft.id, block.header.block_id);
-
+                                    info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
                                     let message_to_send = Update::BlockNew(block_chain.get_last_block().unwrap());
                                     let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
 
                                     self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
                                 },
-                                None => panic!("Raft follower commited block which is not in its uncommitted block que!")
+                                None => panic!("Raft follower committed block which is not in its uncommitted block que!")
                             }
                         }
                         else{
-                            info!("[DONT HAVE COMMITED BLOCK] Raft follower commited block which is not in its uncommitted block que!");
+                            info!("[DONT HAVE COMMITTED BLOCK - {}] Raft follower committed block which is not in its uncommitted block que!", &raft_log_entry.block_hash);
                         }
                     }
 //                    //let block_index = block.block_id;
@@ -280,7 +279,7 @@ impl RaftNode {
         let block_hash = block.hash();
         self.uncommited_block_queue.insert(block_hash, block.clone());
         //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
-        info!("[RECEIVED BLOCK] Node {} received new block with id {}, block was added to uncommitted block que", self.id, block_id);
+        info!("[RECEIVED BLOCK - {}] Received new block {:?} - block was added to uncommitted block que", block.hash(), block);
     }
 }
 #[derive(Debug,Serialize, Deserialize)]
