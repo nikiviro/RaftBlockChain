@@ -2,7 +2,7 @@ use crate::p2p::network_manager::NetworkManager;
 use crate::raft_engine::{RaftEngine, RaftNodeMessage};
 use std::thread;
 use std::sync::{Mutex, mpsc, RwLock, Arc};
-use crate::{Proposal, Update, Blockchain, Block, RaftMessage};
+use crate::{Proposal, Update, Blockchain, Block, RaftMessage, ConfigStructJson, NodeConfig};
 use std::collections::VecDeque;
 use raft::{prelude::*, StateRole};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
@@ -28,11 +28,11 @@ impl Node{
         }
     }
 
-    pub fn start(&mut self, this_peer_port: u64, is_raft_node: bool, peers: Vec<u64>, genesis_config: ConfiglBlockBody) {
+    pub fn start(&mut self, this_peer_port: u64, is_raft_node: bool, peers: Vec<u64>, genesis_config: ConfiglBlockBody, config: NodeConfig) {
 
         let mut block_chain = Arc::new(RwLock::new(Blockchain::new()));
 
-        let mut network_manager = NetworkManager::new(self.node_client.clone());
+        let mut network_manager = NetworkManager::new(self.node_client.clone(), config);
 
         let raft_engine = match is_raft_node {
             true => Some(RaftEngine::new(network_manager.network_manager_sender.clone(), this_peer_port.clone())),
