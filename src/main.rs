@@ -39,6 +39,7 @@ use crate::p2p::network_manager::NetworkManager;
 use crate::raft_engine::RaftEngine;
 use crate::node::Node;
 use crate::blockchain::block::ConfiglBlockBody;
+use std::str::FromStr;
 
 
 mod blockchain;
@@ -48,15 +49,7 @@ mod p2p;
 mod raft_engine;
 mod node;
 
-pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(100);
 
-
-#[derive(Serialize, Deserialize,Debug)]
-pub struct ConfigStruct {
-    pub nodes_without_raft: Vec<String>,
-    pub publick_key: String,
-    pub private_key: String,
-}
 
 fn main() {
     env_logger::init();
@@ -78,7 +71,7 @@ fn main() {
         peer_list.push(peer_port);
     }
 
-    //public,private key generation
+    // //public,private key generation
     // let mut csprng = OsRng{};
     // let keypair: Keypair = Keypair::generate(&mut csprng);
     //
@@ -90,27 +83,20 @@ fn main() {
     // println!("private key: {:?}", encoded_private_key);
 
     let mut is_raft_node = true;
-    let config = load_config_from_file(config_file_name);
+    let config_json = load_config_from_file(config_file_name);
 
     let genesis_config = load_genessis_config();
 
-    if config.nodes_without_raft.contains(&this_peer_port.to_string()){
+    if config_json.nodes_without_raft.contains(&this_peer_port.to_string()){
         is_raft_node = false;
         println!("No-RAFT node")
     }
 
-    let public_key = PublicKey::from_bytes( &base64::decode(config.publick_key).unwrap()).unwrap();
-    let private_key = SecretKey::from_bytes( &base64::decode(config.private_key).unwrap()).unwrap();
-
-    let key_pair = Keypair{
-        secret: private_key,
-        public: public_key
-    };
-
+    let config = NodeConfig::new(config_json);
 
     let mut node = Node::new(this_peer_port);
 
-    node.start(this_peer_port, is_raft_node, peer_list, genesis_config)
+    node.start(this_peer_port, is_raft_node, peer_list, genesis_config, config)
 }
 
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
@@ -124,14 +110,14 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     }
 }
 
-pub fn load_config_from_file(file_name: String) -> ConfigStruct {
+pub fn load_config_from_file(file_name: String) -> ConfigStructJson {
 
     let config_dir = "config/".to_string();
     let mut config = ConfigLoader::default();
     config
         .merge(File::with_name(&format!("{}{}",config_dir,file_name))).unwrap();
     // Print out our settings (as a HashMap)
-    let configstruct =  config.try_into::<ConfigStruct>().unwrap();
+    let configstruct =  config.try_into::<ConfigStructJson>().unwrap();
     println!("\n{:?} \n\n-----------",
              &configstruct);
 
@@ -158,4 +144,43 @@ pub fn now () -> u128 {
         ;
 
     duration.as_secs() as u128 * 1000 + duration.subsec_millis() as u128
+}
+
+
+#[derive(Serialize, Deserialize,Debug)]
+pub struct
+ConfigStructJson {
+    pub nodes_without_raft: Vec<String>,
+    pub publick_key: String,
+    pub private_key: String,
+    pub electors: HashMap<String, String>
+}
+
+#[derive(Debug)]
+pub struct
+NodeConfig {
+    pub nodes_without_raft: Vec<String>,
+    pub key_pair: Keypair,
+    pub electors: HashMap<u64, String>
+}
+
+impl NodeConfig{
+    pub fn new(config_from_json: ConfigStructJson) -> Self{
+        let public_key = PublicKey::from_bytes( &base64::decode(config_from_json.publick_key).unwrap()).unwrap();
+        let private_key = SecretKey::from_bytes( &base64::decode(config_from_json.private_key).unwrap()).unwrap();
+
+        let key_pair = Keypair{
+            secret: private_key,
+            public: public_key
+        };
+        let mut electors: HashMap<u64, String>  = HashMap::new();
+        for (key, value) in config_from_json.electors {
+            electors.insert(u64::from_str(key.as_ref()).expect("json config file in bad format - elector_id"), value);
+        }
+        NodeConfig{
+            nodes_without_raft: config_from_json.nodes_without_raft,
+            key_pair,
+            electors
+        }
+    }
 }
