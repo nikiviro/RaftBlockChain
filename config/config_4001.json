@@ -1,5 +1,10 @@
 {
   "nodes_without_raft":[ "9001", "2", "3" ],
   "publick_key": "SoEXXLPenWPOO/TMAi13rIzhy3JVxyxunPDhZTm/EOE=",
-  "private_key": "nK+AuWCBJC+coM5y0Bw7+EacNY9tTeu0P5yEQujWsw0="
+  "private_key": "nK+AuWCBJC+coM5y0Bw7+EacNY9tTeu0P5yEQujWsw0=",
+  "electors":{
+    "4001":"SoEXXLPenWPOO/TMAi13rIzhy3JVxyxunPDhZTm/EOE=",
+    "4002":"QOaGRnN0I9nypBQHTdhc2zz4+wuzWTHxuC1/iqIhx5k=",
+    "4003":"4+vov/gxnaBs2OUIXK7K1FVrc+NZyBYliocJZJvUscs=",
+    "4004":"2xbDh95/29pp7elzdwyucUiz9G8PXnVhrQ9cc1vC0GA=" }
 }

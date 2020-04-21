@@ -1,0 +1,11 @@
+{
+  "nodes_without_raft":[ "9001", "2", "3" ],
+  "publick_key": "7EjkxkXuHFMryZq6OUZ+QKWwOCyynTjLzrg1S+Ri3dQ=",
+  "private_key": "Xuh2rdEr2q9i2nJ01aw/I08fSiNks6ntg5hSyccKb2k=",
+  "electors:":[
+    "SoEXXLPenWPOO/TMAi13rIzhy3JVxyxunPDhZTm/EOE=",
+    "QOaGRnN0I9nypBQHTdhc2zz4+wuzWTHxuC1/iqIhx5k=",
+    "4+vov/gxnaBs2OUIXK7K1FVrc+NZyBYliocJZJvUscs=",
+    "2xbDh95/29pp7elzdwyucUiz9G8PXnVhrQ9cc1vC0GA="
+  ]
+}
