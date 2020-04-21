@@ -3,10 +3,11 @@ use std::collections::HashMap;
 use crate::p2p::peer::Peer;
 use zmq::{Context, Sendable};
 use std::thread;
-use crate::{Update, Block, RaftMessage};
+use crate::{Update, Block, RaftMessage, ConfigStructJson, NodeConfig};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
 use std::sync::RwLock;
 use crate::node::NodeMessage;
+use ed25519_dalek::{Keypair, Signature};
 
 pub struct NetworkManager {
     pub peers: HashMap<u64, Peer>,
@@ -14,11 +15,11 @@ pub struct NetworkManager {
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     network_manager_receiver: Receiver<NetworkManagerMessage>,
     node_client: Sender<NodeMessage>,
-
+    config: NodeConfig
 }
 
 impl NetworkManager {
-    pub fn new(node_sender: Sender<NodeMessage>) -> Self{
+    pub fn new(node_sender: Sender<NodeMessage>, config: NodeConfig) -> Self{
         let (network_manager_sender, network_manager_receiver) = mpsc::channel();
 
         NetworkManager {
@@ -26,7 +27,8 @@ impl NetworkManager {
             zero_mq_context: Default::default(),
             network_manager_sender,
             network_manager_receiver,
-            node_client: node_sender
+            node_client: node_sender,
+            config: config
         }
     }
 
@@ -84,7 +86,7 @@ impl NetworkManager {
 
     pub fn send_to(&self, request: SendToRequest){
 
-        let network_message = NetworkMessage::new(1,request.to,request.data);
+        let network_message = NetworkMessage::new(1,request.to,request.data, &self.config.key_pair);
         let data = network_message.serialize();
         //let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
         self.peers[&request.to].socket.send(data, 0).unwrap();
@@ -94,7 +96,7 @@ impl NetworkManager {
         //let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
 
         for (id, peer) in self.peers.iter() {
-            let network_message = NetworkMessage::new(1,id.clone(),request.data.clone());
+            let network_message = NetworkMessage::new(1,id.clone(),request.data.clone(), &self.config.key_pair);
             let data = network_message.serialize();
             peer.socket.send(data.clone(),0);
         }
@@ -167,22 +169,21 @@ pub struct NetworkMessage{
     from: u64,
     to: u64,
     message_type: NetworkMessageType,
-    signature: String
+    signature: Signature
 }
 
 impl NetworkMessage{
-    pub fn new ( from: u64, to: u64,message_type: NetworkMessageType) -> Self{
+    pub fn new ( from: u64, to: u64,message_type: NetworkMessageType, key_pair: &Keypair) -> Self{
         let mut bytes = vec![];
         bytes.extend(bincode::serialize(&from).expect("Error while serializing 'from' message field"));
         bytes.extend(bincode::serialize(&to).expect("Error while serializing 'to' message field"));
         bytes.extend(bincode::serialize(&message_type).expect("Error while serializing 'message_type' message field"));
-        let encoded = base64::encode(&bytes);
 
         NetworkMessage{
             from,
             to,
             message_type,
-            signature: encoded
+            signature: key_pair.sign(&bytes)
         }
     }
 
