@@ -74,7 +74,7 @@ impl NetworkManager {
                 //thread::sleep(Duration::from_millis(1000));
                 //responder.send("World", 0).unwrap();
                 let data = &msq[1];
-                let received_message: NetworkMessage = bincode::deserialize(&data).expect("Cannot deserialize update message");
+                let received_message: NetworkMessageType = bincode::deserialize(&data).expect("Cannot deserialize update message");
                 //zeromq_sender.send(received_message);
                 handle_receieved_message(received_message, node_sender.clone());
 
@@ -83,12 +83,16 @@ impl NetworkManager {
     }
 
     pub fn send_to(&self, request: SendToRequest){
-        self.peers[&request.to].socket.send(request.data, 0).unwrap();
+
+        let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
+        self.peers[&request.to].socket.send(data, 0).unwrap();
     }
 
     pub fn send_broadcast(&self, request: BroadCastRequest){
+        let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
+
         for (id, peer) in self.peers.iter() {
-            peer.socket.send(request.data.clone(),0);
+            peer.socket.send(data.clone(),0);
         }
     }
 
@@ -102,12 +106,12 @@ impl NetworkManager {
 }
 
 
-fn handle_receieved_message (received_message: NetworkMessage, node_client: Sender<NodeMessage>){
+fn handle_receieved_message (received_message: NetworkMessageType, node_client: Sender<NodeMessage>){
     match received_message {
-        NetworkMessage::BlockNew(block) => {
+        NetworkMessageType::BlockNew(block) => {
             node_client.send(NodeMessage::BlockNew(block));
         },
-        NetworkMessage::RaftMessage(raft_message) => {
+        NetworkMessageType::RaftMessage(raft_message) => {
             node_client.send(NodeMessage::RaftMessage(raft_message));
         }
         _ => warn!("Unhandled network message received: {:?}", received_message),
@@ -123,11 +127,11 @@ pub enum NetworkManagerMessage {
 #[derive(Debug)]
 pub struct SendToRequest {
     to: u64,
-    data: Vec<u8>,
+    data: NetworkMessageType,
 }
 
 impl SendToRequest{
-    pub fn new ( to: u64, data: Vec<u8>) -> Self{
+    pub fn new ( to: u64, data: NetworkMessageType) -> Self{
         SendToRequest{
             to,
             data
@@ -137,11 +141,11 @@ impl SendToRequest{
 
 #[derive(Debug)]
 pub struct BroadCastRequest {
-    data: Vec<u8>,
+    data: NetworkMessageType
 }
 
 impl BroadCastRequest{
-    pub fn new (data: Vec<u8>) -> Self{
+    pub fn new (data: NetworkMessageType) -> Self{
         BroadCastRequest{
             data
         }
@@ -149,7 +153,14 @@ impl BroadCastRequest{
 }
 
 #[derive(Debug,Serialize, Deserialize)]
-pub enum NetworkMessage{
+pub enum NetworkMessageType {
     BlockNew(Block),
     RaftMessage(RaftMessage)
+}
+
+pub struct NetworkMessage{
+    from: u64,
+    to: u64,
+    message_type: NetworkMessageType,
+    signature: String
 }

@@ -11,7 +11,7 @@ use raft::storage::MemStorage;
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
-use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest};
+use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessage, NetworkMessageType};
 use crate::now;
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
@@ -37,11 +37,11 @@ impl RaftNode {
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut rng = rand::thread_rng();
-        let election_tick = rng.gen_range(30, 100);
+        let election_tick = rng.gen_range(300, 1000);
         println!("Election tick:{}",election_tick);
         let mut cfg = Config {
             election_tick: election_tick,
-            heartbeat_tick: 3,
+            heartbeat_tick: 30,
             id: id,
             tag: format!("raft_node{}", id),
             pre_vote: true,
@@ -70,6 +70,9 @@ impl RaftNode {
 
     // Step a raft message, initialize the raft if need.
     pub fn step(&mut self, msg: Message) {
+        if (msg.msg_type != MessageType::MsgHeartbeat && msg.msg_type != MessageType::MsgHeartbeatResponse){
+            info!("Received raft message - type: {:?}, from:{:?}, commit:{:?}, entries:{:?}", msg.msg_type, msg.from, msg.commit, msg.entries);
+        }
         if self.raw_node.is_none() {
             if is_initial_msg(&msg) {
                 self.initialize_raft_from_message(&msg);
@@ -167,10 +170,8 @@ impl RaftNode {
         for msg in ready.messages.drain(..) {
             //info!("Sending message:{:?}",msg);
             let to = msg.get_to();
-            let message_to_send = Update::RaftMessage(RaftMessage::new(msg));
-            let data = bincode::serialize(&message_to_send).expect("Error while serializing Update RaftMessage");
-            //let data = msg.write_to_bytes().unwrap();
-            self.network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(to, data)));
+            let message_to_send = NetworkMessageType::RaftMessage(RaftMessage::new(msg));
+            self.network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(to, message_to_send)));
         }
 
         let mut block_chain = self.blockchain.write().expect("BlockChain Lock is poisoned");
@@ -218,10 +219,8 @@ impl RaftNode {
                                     block_chain.add_block(block.clone());
                                     info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
 
-                                    let message_to_send = Update::BlockNew(block_chain.get_last_block().unwrap());
-                                    let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
-
-                                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
+                                    let message_to_send = NetworkMessageType::BlockNew(block_chain.get_last_block().unwrap());
+                                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
                                 },
                                 None => panic!("Raft leader committed block which is not in its uncommitted block que!")
                             }
@@ -237,10 +236,8 @@ impl RaftNode {
                                 Some(block) => {
                                     block_chain.add_block(block.clone());
                                     info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
-                                    let message_to_send = Update::BlockNew(block_chain.get_last_block().unwrap());
-                                    let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
-
-                                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
+                                    let message_to_send = NetworkMessageType::BlockNew(block_chain.get_last_block().unwrap());
+                                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
                                 },
                                 None => panic!("Raft follower committed block which is not in its uncommitted block que!")
                             }

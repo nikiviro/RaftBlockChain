@@ -7,7 +7,7 @@ use raft::RawNode;
 use raft::{prelude::*, StateRole};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::collections::VecDeque;
-use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, BroadCastRequest};
+use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, BroadCastRequest, NetworkMessageType};
 use crate::blockchain::block::{BlockType, ConfiglBlockBody};
 use crate::Blockchain;
 
@@ -115,9 +115,8 @@ impl RaftEngine {
                     self.proposals_global.push_back(proposal);
                     raft_node.uncommited_block_queue.insert(new_block.hash(), new_block.clone());
 
-                    let message_to_send = Update::BlockNew(new_block);
-                    let data = bincode::serialize(&message_to_send).expect("Error while serializing Update (New block) RaftMessage");
-                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(data)));
+                    let message_to_send = NetworkMessageType::BlockNew(new_block);
+                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
 
                     new_block_timer = Instant::now();
                 }
