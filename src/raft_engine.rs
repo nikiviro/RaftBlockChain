@@ -8,7 +8,7 @@ use raft::{prelude::*, StateRole};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::collections::VecDeque;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, BroadCastRequest};
-use crate::blockchain::block::BlockType;
+use crate::blockchain::block::{BlockType, ConfiglBlockBody};
 use crate::Blockchain;
 
 
@@ -43,9 +43,9 @@ impl RaftEngine {
 
     pub fn start(
         &mut self,
-        is_leader: bool,
         peer_list: Vec<u64>,
         mut block_chain: Arc<RwLock<Blockchain>>,
+        genesis_config: ConfiglBlockBody
     ){
         let mut t = Instant::now();
         let mut leader_stop_timer = Instant::now();
@@ -106,7 +106,7 @@ impl RaftEngine {
                     }else {
                         //First block - genesis
                         new_block_id = 1;
-                        new_block = Block::genessis(peer_list.clone(), self.raft_node_id)
+                        new_block = Block::genesis(genesis_config.clone(), self.raft_node_id)
                     }
                     println!("| ---------------------- |");
                     println!("| Created new block - {} |",new_block_id);

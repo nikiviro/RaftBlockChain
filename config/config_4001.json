@@ -1,0 +1,5 @@
+{
+  "nodes_without_raft":[ "9001", "2", "3" ],
+  "publick_key": "SoEXXLPenWPOO/TMAi13rIzhy3JVxyxunPDhZTm/EOE=",
+  "private_key": "nK+AuWCBJC+coM5y0Bw7+EacNY9tTeu0P5yEQujWsw0="
+}

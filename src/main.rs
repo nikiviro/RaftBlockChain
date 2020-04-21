@@ -38,6 +38,7 @@ pub use crate::proposal::Proposal;
 use crate::p2p::network_manager::NetworkManager;
 use crate::raft_engine::RaftEngine;
 use crate::node::Node;
+use crate::blockchain::block::ConfiglBlockBody;
 
 
 mod blockchain;
@@ -68,9 +69,10 @@ fn main() {
     }
     let is_leader_arg: u8= args[1].parse().unwrap();
     let is_leader = is_leader_arg != 0;
-    let this_peer_port: u64 = args[2].parse().unwrap();
+    let config_file_name: String =  args[2].parse().unwrap();
+    let this_peer_port: u64 = args[3].parse().unwrap();
     let mut peer_list = Vec::new();
-    for x in 3..(args.len()){
+    for x in 4..(args.len()){
         println!("Peer: {}", args[x]);
         let peer_port: u64 = args[x].parse().unwrap();
         peer_list.push(peer_port);
@@ -88,7 +90,9 @@ fn main() {
     // println!("private key: {:?}", encoded_private_key);
 
     let mut is_raft_node = true;
-    let config = load_config_from_file();
+    let config = load_config_from_file(config_file_name);
+
+    let genesis_config = load_genessis_config();
 
     if config.nodes_without_raft.contains(&this_peer_port.to_string()){
         is_raft_node = false;
@@ -103,10 +107,10 @@ fn main() {
         public: public_key
     };
 
-    
+
     let mut node = Node::new(this_peer_port);
 
-    node.start(this_peer_port, is_raft_node, is_leader, peer_list)
+    node.start(this_peer_port, is_raft_node, peer_list, genesis_config)
 }
 
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
@@ -120,17 +124,31 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     }
 }
 
-pub fn load_config_from_file() -> ConfigStruct {
+pub fn load_config_from_file(file_name: String) -> ConfigStruct {
 
+    let config_dir = "config/".to_string();
     let mut config = ConfigLoader::default();
     config
-        .merge(File::with_name("config/config.json")).unwrap();
+        .merge(File::with_name(&format!("{}{}",config_dir,file_name))).unwrap();
     // Print out our settings (as a HashMap)
     let configstruct =  config.try_into::<ConfigStruct>().unwrap();
     println!("\n{:?} \n\n-----------",
              &configstruct);
 
     configstruct
+}
+
+pub fn load_genessis_config() -> ConfiglBlockBody{
+
+    let mut config = ConfigLoader::default();
+    config
+        .merge(File::with_name("config/genesis.json")).unwrap();
+    // Print out our settings (as a HashMap)
+    let genesis_config =  config.try_into::<ConfiglBlockBody>().unwrap();
+    println!("\n{:?} \n\n-----------",
+             &genesis_config);
+
+    genesis_config
 }
 
 pub fn now () -> u128 {

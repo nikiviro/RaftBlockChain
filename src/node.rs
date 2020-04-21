@@ -6,6 +6,7 @@ use crate::{Proposal, Update, Blockchain, Block, RaftMessage};
 use std::collections::VecDeque;
 use raft::{prelude::*, StateRole};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
+use crate::blockchain::block::ConfiglBlockBody;
 
 
 pub struct Node{
@@ -27,10 +28,9 @@ impl Node{
         }
     }
 
-    pub fn start(&mut self, this_peer_port: u64, is_raft_node: bool, is_leader: bool, peers: Vec<u64>) {
+    pub fn start(&mut self, this_peer_port: u64, is_raft_node: bool, peers: Vec<u64>, genesis_config: ConfiglBlockBody) {
 
         let mut block_chain = Arc::new(RwLock::new(Blockchain::new()));
-
 
         let mut network_manager = NetworkManager::new(self.node_client.clone());
 
@@ -56,7 +56,7 @@ impl Node{
             let mut raft_engine = raft_engine.expect("Raft engine is not initialized");
 
             let handle = thread::spawn( move || {
-                raft_engine.start(is_leader,peers.clone(), block_chain.clone());
+                raft_engine.start(peers.clone(), block_chain.clone(), genesis_config);
             }
 
             );

@@ -57,12 +57,12 @@ impl Block {
         }
     }
 
-    pub fn genessis(elector_nodes: Vec<u64>, leader_id: u64) -> Self{
+    pub fn genesis(genesis_block_body: ConfiglBlockBody, leader_id: u64) -> Self{
         Block {
             header: BlockHeader::new(1,1,
                                      BlockType::Config,0,
                                      "1".to_string()),
-            block_body: BlockBody::Config(ConfiglBlockBody::new(elector_nodes,leader_id))
+            block_body: BlockBody::Config(genesis_block_body)
         }
     }
 
@@ -116,12 +116,12 @@ impl Default for NormalBlockBody {
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfiglBlockBody{
-    pub list_of_elector_nodes: Vec<u64>,
+    pub list_of_elector_nodes: Vec<String>,
     pub current_leader_id: u64
 }
 
 impl ConfiglBlockBody{
-    pub fn new(list_of_elector_nodes: Vec<u64>, current_leader_id: u64) -> Self {
+    pub fn new(list_of_elector_nodes: Vec<String>, current_leader_id: u64) -> Self {
         ConfiglBlockBody{
             list_of_elector_nodes,
             current_leader_id
