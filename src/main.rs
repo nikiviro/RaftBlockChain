@@ -39,6 +39,7 @@ use crate::p2p::network_manager::NetworkManager;
 use crate::raft_engine::RaftEngine;
 use crate::node::Node;
 
+
 mod blockchain;
 mod raft_node;
 mod proposal;
@@ -52,6 +53,8 @@ pub const RAFT_TICK_TIMEOUT: Duration = Duration::from_millis(100);
 #[derive(Serialize, Deserialize,Debug)]
 pub struct ConfigStruct {
     pub nodes_without_raft: Vec<String>,
+    pub publick_key: String,
+    pub private_key: String,
 }
 
 fn main() {
@@ -92,6 +95,15 @@ fn main() {
         println!("No-RAFT node")
     }
 
+    let public_key = PublicKey::from_bytes( &base64::decode(config.publick_key).unwrap()).unwrap();
+    let private_key = SecretKey::from_bytes( &base64::decode(config.private_key).unwrap()).unwrap();
+
+    let key_pair = Keypair{
+        secret: private_key,
+        public: public_key
+    };
+
+    
     let mut node = Node::new(this_peer_port);
 
     node.start(this_peer_port, is_raft_node, is_leader, peer_list)
