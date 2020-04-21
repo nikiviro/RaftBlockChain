@@ -5,9 +5,9 @@ use zmq::{Context, Sendable};
 use std::thread;
 use crate::{Update, Block, RaftMessage, ConfigStructJson, NodeConfig};
 use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
-use std::sync::RwLock;
+use std::sync::{RwLock, Arc};
 use crate::node::NodeMessage;
-use ed25519_dalek::{Keypair, Signature};
+use ed25519_dalek::{Keypair, Signature, PublicKey};
 
 pub struct NetworkManager {
     pub peers: HashMap<u64, Peer>,
@@ -15,11 +15,11 @@ pub struct NetworkManager {
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     network_manager_receiver: Receiver<NetworkManagerMessage>,
     node_client: Sender<NodeMessage>,
-    config: NodeConfig
+    config: Arc<NodeConfig>
 }
 
 impl NetworkManager {
-    pub fn new(node_sender: Sender<NodeMessage>, config: NodeConfig) -> Self{
+    pub fn new(node_sender: Sender<NodeMessage>, config: Arc<NodeConfig>) -> Self{
         let (network_manager_sender, network_manager_receiver) = mpsc::channel();
 
         NetworkManager {
@@ -39,12 +39,12 @@ impl NetworkManager {
         self.peers.insert(port,Peer::new(port,&self.zero_mq_context));
     }
 
-    pub fn start(&mut self, this_peer_port: u64,peer_list: Vec<u64>) {
+    pub fn start(&mut self, peer_list: Vec<u64>) {
 
         for peer_port in peer_list.iter(){
             self.add_new_peer(peer_port.clone());
         }
-        self.listen(this_peer_port);
+        self.listen(self.config.node_id);
 
         loop {
             match self.network_manager_receiver.try_recv() {
@@ -69,6 +69,7 @@ impl NetworkManager {
         //Create new thread in which we will listen for incoming zeromq messages from other peers
         //Received message will be forwarded through the channel to main thread
         let node_sender = self.node_client.clone();
+        let elector_list = self.config.electors.clone();
         let receiver_thread_handle = thread::spawn( move ||
             loop {
                 let msq = router_socket.recv_multipart(0).unwrap();
@@ -78,7 +79,7 @@ impl NetworkManager {
                 let data = &msq[1];
                 let received_message: NetworkMessage = bincode::deserialize(&data).expect("Cannot deserialize update message");
                 //zeromq_sender.send(received_message);
-                handle_receieved_message(received_message.message_type, node_sender.clone());
+                handle_receieved_message(received_message, node_sender.clone(),&elector_list);
 
             }
         );
@@ -86,7 +87,7 @@ impl NetworkManager {
 
     pub fn send_to(&self, request: SendToRequest){
 
-        let network_message = NetworkMessage::new(1,request.to,request.data, &self.config.key_pair);
+        let network_message = NetworkMessage::new(self.config.node_id,request.to,request.data, &self.config.key_pair);
         let data = network_message.serialize();
         //let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
         self.peers[&request.to].socket.send(data, 0).unwrap();
@@ -96,7 +97,7 @@ impl NetworkManager {
         //let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
 
         for (id, peer) in self.peers.iter() {
-            let network_message = NetworkMessage::new(1,id.clone(),request.data.clone(), &self.config.key_pair);
+            let network_message = NetworkMessage::new(self.config.node_id,id.clone(),request.data.clone(), &self.config.key_pair);
             let data = network_message.serialize();
             peer.socket.send(data.clone(),0);
         }
@@ -112,13 +113,33 @@ impl NetworkManager {
 }
 
 
-fn handle_receieved_message (received_message: NetworkMessageType, node_client: Sender<NodeMessage>){
-    match received_message {
+fn handle_receieved_message (received_message: NetworkMessage, node_client: Sender<NodeMessage>, elector_list: &HashMap<u64, PublicKey>){
+
+    match received_message.message_type {
         NetworkMessageType::BlockNew(block) => {
             node_client.send(NodeMessage::BlockNew(block));
         },
-        NetworkMessageType::RaftMessage(raft_message) => {
-            node_client.send(NodeMessage::RaftMessage(raft_message));
+        NetworkMessageType::RaftMessage(ref raft_message) => {
+            //Verify raft node signature
+            let sender_id = received_message.from;
+            match elector_list.get(&sender_id){
+                Some(public_key) => {
+                   match received_message.check_signature(&public_key){
+                       true => {
+                           info!("[RAFT MESSAGE SIGNATURE CORRECT]")
+                       },
+                       false =>  {
+                           info!("[RAFT MESSAGE SIGNATURE INCORRECT]");
+                           return;
+                       }
+                   }
+                }
+                None => {
+                    info!("[RAFT MESSAGE UKNOWN NODE] - Received raft message from node with unknown public key");
+                    return;
+                }
+            }
+            node_client.send(NodeMessage::RaftMessage(raft_message.clone()));
         }
         _ => warn!("Unhandled network message received: {:?}", received_message),
     }
@@ -186,8 +207,17 @@ impl NetworkMessage{
             signature: key_pair.sign(&bytes)
         }
     }
-
+    pub fn get_bytes_for_signature(&self) -> Vec<u8>{
+        let mut bytes = vec![];
+        bytes.extend(bincode::serialize(&self.from).expect("Error while serializing 'from' message field"));
+        bytes.extend(bincode::serialize(&self.to).expect("Error while serializing 'to' message field"));
+        bytes.extend(bincode::serialize(&self.message_type).expect("Error while serializing 'message_type' message field"));
+        bytes
+    }
     pub fn serialize(&self) -> Vec<u8>{
         bincode::serialize(&self).expect("Error while serializing NetworkMessage struct")
+    }
+    pub fn check_signature(&self, public_key: &PublicKey) -> bool {
+        public_key.verify(&self.get_bytes_for_signature(), &self.signature).is_ok()
     }
 }

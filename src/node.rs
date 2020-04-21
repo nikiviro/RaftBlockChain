@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 use raft::{prelude::*, StateRole};
 use std::sync::mpsc::{channel, Sender, Receiver, TryRecvError};
 use crate::blockchain::block::ConfiglBlockBody;
+use std::rc::Rc;
 
 
 pub struct Node{
@@ -14,28 +15,30 @@ pub struct Node{
     node_client: Sender<NodeMessage>,
     node_receiver: Receiver<NodeMessage>,
     raft_engine_client: Option<Sender<RaftNodeMessage>>,
+    config: Arc<NodeConfig>
 }
 
 impl Node{
 
-    pub fn new(this_peer_port: u64) -> Self {
+    pub fn new(this_peer_port: u64, config: Arc<NodeConfig>) -> Self {
         let (tx, rx) = mpsc::channel();
         Node{
             this_peer_port,
             node_client: tx,
             node_receiver: rx,
             raft_engine_client: None,
+            config: config
         }
     }
 
-    pub fn start(&mut self, this_peer_port: u64, is_raft_node: bool, peers: Vec<u64>, genesis_config: ConfiglBlockBody, config: NodeConfig) {
+    pub fn start(&mut self, is_raft_node: bool, peers: Vec<u64>, genesis_config: ConfiglBlockBody) {
 
         let mut block_chain = Arc::new(RwLock::new(Blockchain::new()));
 
-        let mut network_manager = NetworkManager::new(self.node_client.clone(), config);
+        let mut network_manager = NetworkManager::new(self.node_client.clone(), self.config.clone());
 
         let raft_engine = match is_raft_node {
-            true => Some(RaftEngine::new(network_manager.network_manager_sender.clone(), this_peer_port.clone())),
+            true => Some(RaftEngine::new(network_manager.network_manager_sender.clone(), self.config.node_id.clone())),
             _ => None
         };
 
@@ -48,7 +51,7 @@ impl Node{
         let peers_raft = peers.clone();
 
         let handle = thread::spawn( move ||
-            network_manager.start(this_peer_port,peers_net_manager)
+            network_manager.start(peers_net_manager)
         );
 
         if(is_raft_node){
@@ -84,6 +87,9 @@ impl Node{
                             }
                         },
                         NodeMessage::RaftMessage(raft_message) => {
+
+
+
                             if self.raft_engine_client.is_some(){
                                 self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::RaftMessage(raft_message));
                             }

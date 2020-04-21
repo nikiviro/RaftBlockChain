@@ -40,6 +40,7 @@ use crate::raft_engine::RaftEngine;
 use crate::node::Node;
 use crate::blockchain::block::ConfiglBlockBody;
 use std::str::FromStr;
+use std::rc::Rc;
 
 
 mod blockchain;
@@ -92,11 +93,12 @@ fn main() {
         println!("No-RAFT node")
     }
 
-    let config = NodeConfig::new(config_json);
+    let config = Arc::new(NodeConfig::new(config_json));
 
-    let mut node = Node::new(this_peer_port);
+    let mut node = Node::new(this_peer_port, config);
 
-    node.start(this_peer_port, is_raft_node, peer_list, genesis_config, config)
+
+    node.start(is_raft_node, peer_list, genesis_config)
 }
 
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
@@ -151,6 +153,7 @@ pub fn now () -> u128 {
 pub struct
 ConfigStructJson {
     pub nodes_without_raft: Vec<String>,
+    pub node_id: u64,
     pub publick_key: String,
     pub private_key: String,
     pub electors: HashMap<String, String>
@@ -160,8 +163,9 @@ ConfigStructJson {
 pub struct
 NodeConfig {
     pub nodes_without_raft: Vec<String>,
+    pub node_id: u64,
     pub key_pair: Keypair,
-    pub electors: HashMap<u64, String>
+    pub electors: HashMap<u64, PublicKey>
 }
 
 impl NodeConfig{
@@ -173,14 +177,17 @@ impl NodeConfig{
             secret: private_key,
             public: public_key
         };
-        let mut electors: HashMap<u64, String>  = HashMap::new();
+        let mut electors: HashMap<u64, PublicKey>  = HashMap::new();
         for (key, value) in config_from_json.electors {
-            electors.insert(u64::from_str(key.as_ref()).expect("json config file in bad format - elector_id"), value);
+            let node_id = u64::from_str(key.as_ref()).expect("json config file in bad format - elector_id");
+            let node_public_key = PublicKey::from_bytes( &base64::decode(value).unwrap()).unwrap();
+            electors.insert(node_id,node_public_key);
         }
         NodeConfig{
             nodes_without_raft: config_from_json.nodes_without_raft,
+            node_id: config_from_json.node_id,
             key_pair,
-            electors
+            electors,
         }
     }
 }
