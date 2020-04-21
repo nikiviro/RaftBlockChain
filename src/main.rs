@@ -5,6 +5,10 @@ extern crate log;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate rand;
+extern crate ed25519_dalek;
+extern crate base64;
+
 
 use std::thread;
 use std::collections::{HashMap, VecDeque};
@@ -19,6 +23,12 @@ use config::{Config as ConfigLoader, File};
 use protobuf::{self, Message as ProtobufMessage};
 use raft::{prelude::*, StateRole};
 use zmq::Socket;
+
+use rand::rngs::OsRng;
+use ed25519_dalek::{Keypair, PUBLIC_KEY_LENGTH, PublicKey, SecretKey};
+use ed25519_dalek::Signature;
+use base64::{encode, decode};
+use bincode::{serialize};
 
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
@@ -63,6 +73,16 @@ fn main() {
         peer_list.push(peer_port);
     }
 
+    //public,private key generation
+    // let mut csprng = OsRng{};
+    // let keypair: Keypair = Keypair::generate(&mut csprng);
+    //
+    // let public_key_bytes: [u8; PUBLIC_KEY_LENGTH] = keypair.public.to_bytes();
+    // let encoded_public_key = base64::encode(&public_key_bytes);
+    // println!("public key: {:?}", encoded_public_key);
+    // let private_key_bytes: [u8; PUBLIC_KEY_LENGTH] = keypair.secret.to_bytes();
+    // let encoded_private_key = base64::encode(&private_key_bytes);
+    // println!("private key: {:?}", encoded_private_key);
 
     let mut is_raft_node = true;
     let config = load_config_from_file();
