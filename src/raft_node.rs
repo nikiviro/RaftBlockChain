@@ -11,7 +11,7 @@ use raft::storage::MemStorage;
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
-use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessage, NetworkMessageType};
+use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType};
 use crate::now;
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
@@ -285,7 +285,7 @@ pub enum Update {
     RaftMessage(RaftMessage)
 }
 
-#[derive(Debug,Serialize, Deserialize)]
+#[derive(Debug,Serialize, Deserialize, Clone)]
 pub struct RaftMessage{
     pub content: Vec<u8>,
 }

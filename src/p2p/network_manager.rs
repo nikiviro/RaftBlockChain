@@ -74,9 +74,9 @@ impl NetworkManager {
                 //thread::sleep(Duration::from_millis(1000));
                 //responder.send("World", 0).unwrap();
                 let data = &msq[1];
-                let received_message: NetworkMessageType = bincode::deserialize(&data).expect("Cannot deserialize update message");
+                let received_message: NetworkMessage = bincode::deserialize(&data).expect("Cannot deserialize update message");
                 //zeromq_sender.send(received_message);
-                handle_receieved_message(received_message, node_sender.clone());
+                handle_receieved_message(received_message.message_type, node_sender.clone());
 
             }
         );
@@ -84,14 +84,18 @@ impl NetworkManager {
 
     pub fn send_to(&self, request: SendToRequest){
 
-        let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
+        let network_message = NetworkMessage::new(1,request.to,request.data);
+        let data = network_message.serialize();
+        //let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
         self.peers[&request.to].socket.send(data, 0).unwrap();
     }
 
     pub fn send_broadcast(&self, request: BroadCastRequest){
-        let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
+        //let data =  bincode::serialize(&request.data).expect("Error while serializing message to send");
 
         for (id, peer) in self.peers.iter() {
+            let network_message = NetworkMessage::new(1,id.clone(),request.data.clone());
+            let data = network_message.serialize();
             peer.socket.send(data.clone(),0);
         }
     }
@@ -152,15 +156,37 @@ impl BroadCastRequest{
     }
 }
 
-#[derive(Debug,Serialize, Deserialize)]
+#[derive(Debug,Serialize, Deserialize, Clone)]
 pub enum NetworkMessageType {
     BlockNew(Block),
     RaftMessage(RaftMessage)
 }
 
+#[derive(Debug,Serialize, Deserialize)]
 pub struct NetworkMessage{
     from: u64,
     to: u64,
     message_type: NetworkMessageType,
     signature: String
+}
+
+impl NetworkMessage{
+    pub fn new ( from: u64, to: u64,message_type: NetworkMessageType) -> Self{
+        let mut bytes = vec![];
+        bytes.extend(bincode::serialize(&from).expect("Error while serializing 'from' message field"));
+        bytes.extend(bincode::serialize(&to).expect("Error while serializing 'to' message field"));
+        bytes.extend(bincode::serialize(&message_type).expect("Error while serializing 'message_type' message field"));
+        let encoded = base64::encode(&bytes);
+
+        NetworkMessage{
+            from,
+            to,
+            message_type,
+            signature: encoded
+        }
+    }
+
+    pub fn serialize(&self) -> Vec<u8>{
+        bincode::serialize(&self).expect("Error while serializing NetworkMessage struct")
+    }
 }
