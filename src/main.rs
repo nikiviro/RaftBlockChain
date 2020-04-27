@@ -84,9 +84,8 @@ fn main() {
     // println!("private key: {:?}", encoded_private_key);
 
     let mut is_raft_node = true;
-    let config = load_config_from_file(config_file_name);
 
-    let genesis_config = load_genessis_config();
+    let (config, genesis_config) = load_config(config_file_name, "genesis.json".to_string());
 
     if config.nodes_without_raft.contains(&this_peer_port.to_string()){
         is_raft_node = false;
@@ -97,8 +96,7 @@ fn main() {
 
     let mut node = Node::new(this_peer_port, config);
 
-
-    node.start(is_raft_node, peer_list, genesis_config)
+    node.start(is_raft_node, genesis_config)
 }
 
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
@@ -112,7 +110,29 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     }
 }
 
-pub fn load_config_from_file(file_name: String) -> NodeConfig {
+pub fn load_config(config_file_name: String, genesis_file_name: String) -> (NodeConfig, ConfiglBlockBody){
+
+    //load config json to Rust struct
+    let config_json = load_config_from_file(config_file_name);
+    //load genesis json to Rust struct
+    let genesis_json = load_genesis_config(genesis_file_name);
+
+    // convert HashMap<String, String> from json to HashMap<u64, PublicKey>
+    let mut list_of_elector_nodes: HashMap<u64, PublicKey>  = HashMap::new();
+    for (key, value) in genesis_json.list_of_elector_nodes {
+        let node_id = u64::from_str(key.as_ref()).expect("json config file in bad format - elector_id");
+        let node_public_key = PublicKey::from_bytes( &base64::decode(value).unwrap()).unwrap();
+        list_of_elector_nodes.insert(node_id,node_public_key);
+    }
+
+    let genesis = ConfiglBlockBody::new(list_of_elector_nodes, 0);
+
+    let config = NodeConfig::new_from_config_json(config_json, genesis.list_of_elector_nodes.clone());
+
+    (config, genesis)
+}
+
+pub fn load_config_from_file(file_name: String) -> ConfigStructJson {
 
     let config_dir = "config/".to_string();
     let mut config = ConfigLoader::default();
@@ -123,29 +143,21 @@ pub fn load_config_from_file(file_name: String) -> NodeConfig {
     println!("\n{:?} \n\n-----------",
              &configstruct);
 
-    NodeConfig::new(configstruct)
+    configstruct
 }
 
-pub fn load_genessis_config() -> ConfiglBlockBody{
+pub fn load_genesis_config(file_name: String) -> GenesisConfigStructJson{
 
+    let config_dir = "config/".to_string();
     let mut config = ConfigLoader::default();
     config
-        .merge(File::with_name("config/genesis.json")).unwrap();
+        .merge(File::with_name(&format!("{}{}",config_dir,file_name))).unwrap();
     // Print out our settings (as a HashMap)
     let genesis_config =  config.try_into::<GenesisConfigStructJson>().unwrap();
     println!("\n{:?} \n\n-----------",
              &genesis_config);
 
-
-    // convert HashMap<String, String> from json to HashMap<u64, PublicKey>
-    let mut list_of_elector_nodes: HashMap<u64, PublicKey>  = HashMap::new();
-    for (key, value) in genesis_config.list_of_elector_nodes {
-        let node_id = u64::from_str(key.as_ref()).expect("json config file in bad format - elector_id");
-        let node_public_key = PublicKey::from_bytes( &base64::decode(value).unwrap()).unwrap();
-        list_of_elector_nodes.insert(node_id,node_public_key);
-    }
-
-    ConfiglBlockBody::new(list_of_elector_nodes, 0)
+    genesis_config
 }
 
 pub fn now () -> u128 {
@@ -165,7 +177,7 @@ ConfigStructJson {
     pub node_id: u64,
     pub public_key: String,
     pub private_key: String,
-    pub electors: HashMap<String, String>
+    pub nodes_to_connect: HashMap<String, String>,
 }
 
 #[derive(Debug)]
@@ -174,11 +186,12 @@ NodeConfig {
     pub nodes_without_raft: Vec<String>,
     pub node_id: u64,
     pub key_pair: Keypair,
+    pub nodes_to_connect: HashMap<u64, String>,
     pub electors: HashMap<u64, PublicKey>
 }
 
 impl NodeConfig{
-    pub fn new(config_from_json: ConfigStructJson) -> Self{
+    pub fn new_from_config_json(config_from_json: ConfigStructJson, electors: HashMap<u64, PublicKey>) -> Self{
         let public_key = PublicKey::from_bytes( &base64::decode(config_from_json.public_key).unwrap()).unwrap();
         let private_key = SecretKey::from_bytes( &base64::decode(config_from_json.private_key).unwrap()).unwrap();
 
@@ -186,16 +199,19 @@ impl NodeConfig{
             secret: private_key,
             public: public_key
         };
-        let mut electors: HashMap<u64, PublicKey>  = HashMap::new();
-        for (key, value) in config_from_json.electors {
+
+        let mut nodes_to_connect: HashMap<u64, String>  = HashMap::new();
+        for (key, value) in config_from_json.nodes_to_connect {
             let node_id = u64::from_str(key.as_ref()).expect("json config file in bad format - elector_id");
-            let node_public_key = PublicKey::from_bytes( &base64::decode(value).unwrap()).unwrap();
-            electors.insert(node_id,node_public_key);
+            nodes_to_connect.insert(node_id,value);
         }
+
+
         NodeConfig{
             nodes_without_raft: config_from_json.nodes_without_raft,
             node_id: config_from_json.node_id,
             key_pair,
+            nodes_to_connect,
             electors,
         }
     }

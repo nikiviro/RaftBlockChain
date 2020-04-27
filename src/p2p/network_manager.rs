@@ -39,9 +39,9 @@ impl NetworkManager {
         self.peers.insert(port,Peer::new(port,&self.zero_mq_context));
     }
 
-    pub fn start(&mut self, peer_list: Vec<u64>) {
+    pub fn start(&mut self) {
 
-        for peer_port in peer_list.iter(){
+        for (peer_port, address) in self.config.nodes_to_connect.clone(){
             self.add_new_peer(peer_port.clone());
         }
         self.listen(self.config.node_id);

@@ -31,7 +31,7 @@ impl Node{
         }
     }
 
-    pub fn start(&mut self, is_raft_node: bool, peers: Vec<u64>, genesis_config: ConfiglBlockBody) {
+    pub fn start(&mut self, is_raft_node: bool, genesis_config: ConfiglBlockBody) {
 
         let mut block_chain = Arc::new(RwLock::new(Blockchain::new()));
 
@@ -47,11 +47,8 @@ impl Node{
             _ => {}
         }
 
-        let peers_net_manager = peers.clone();
-        let peers_raft = peers.clone();
-
         let handle = thread::spawn( move ||
-            network_manager.start(peers_net_manager)
+            network_manager.start()
         );
 
         if(is_raft_node){
@@ -59,7 +56,7 @@ impl Node{
             let mut raft_engine = raft_engine.expect("Raft engine is not initialized");
 
             let handle = thread::spawn( move || {
-                raft_engine.start(peers.clone(), block_chain.clone(), genesis_config);
+                raft_engine.start( block_chain.clone(), genesis_config);
             }
 
             );

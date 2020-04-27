@@ -15,7 +15,7 @@ use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToR
 use crate::now;
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
-use crate::blockchain::block::BlockType;
+use crate::blockchain::block::{BlockType, ConfiglBlockBody};
 
 pub struct RaftNode {
     // None if the raft is not initialized.
@@ -32,7 +32,7 @@ impl RaftNode {
     pub fn new(
         id: u64,
         network_manager: Sender<NetworkManagerMessage>,
-        mut peers_list: Vec<u64>,
+        genesis_config: ConfiglBlockBody,
         block_chain: Arc<RwLock<Blockchain>>
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
@@ -47,15 +47,18 @@ impl RaftNode {
             pre_vote: true,
             ..Default::default()
         };
-        peers_list.push(id);
-        let raft_peers: Vec<Peer> = peers_list
-            .iter()
-            .map(|id| Peer {
-                id: *id,
-                context: None,
-            })
-            .collect();
 
+
+        let mut raft_peers: Vec<Peer> = vec![];
+        //Add all electors from genesis file to raft_peers
+        for (key, value) in genesis_config.list_of_elector_nodes {
+            raft_peers.push(
+                Peer{
+                    id: key,
+                    context: None,
+                }
+            );
+        }
         let storage = MemStorage::default();
         let raft = Some(RawNode::new(&cfg, storage, raft_peers).unwrap());
         RaftNode {

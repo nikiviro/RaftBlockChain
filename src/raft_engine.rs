@@ -43,7 +43,6 @@ impl RaftEngine {
 
     pub fn start(
         &mut self,
-        peer_list: Vec<u64>,
         mut block_chain: Arc<RwLock<Blockchain>>,
         genesis_config: ConfiglBlockBody
     ){
@@ -54,7 +53,8 @@ impl RaftEngine {
         let mut raft_node = RaftNode::new(
             self.raft_node_id,
             self.network_manager_sender.clone(),
-            peer_list.clone(), block_chain.clone()
+            genesis_config.clone(),
+            block_chain.clone()
         );
 
         loop {
