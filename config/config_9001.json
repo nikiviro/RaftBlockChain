@@ -1,11 +1,7 @@
 {
   "nodes_without_raft":[ "9001", "2", "3" ],
   "node_id": "9001",
-  "publick_key": "7EjkxkXuHFMryZq6OUZ+QKWwOCyynTjLzrg1S+Ri3dQ=",
+  "public_key": "7EjkxkXuHFMryZq6OUZ+QKWwOCyynTjLzrg1S+Ri3dQ=",
   "private_key": "Xuh2rdEr2q9i2nJ01aw/I08fSiNks6ntg5hSyccKb2k=",
-  "electors":{
-    "4001":"SoEXXLPenWPOO/TMAi13rIzhy3JVxyxunPDhZTm/EOE=",
-    "4002":"QOaGRnN0I9nypBQHTdhc2zz4+wuzWTHxuC1/iqIhx5k=",
-    "4003":"4+vov/gxnaBs2OUIXK7K1FVrc+NZyBYliocJZJvUscs=",
-    "4004":"2xbDh95/29pp7elzdwyucUiz9G8PXnVhrQ9cc1vC0GA=" }
+  "electors":{}
 }

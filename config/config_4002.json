@@ -1,7 +1,7 @@
 {
   "nodes_without_raft":[ "9001", "2", "3" ],
   "node_id": "4002",
-  "publick_key": "QOaGRnN0I9nypBQHTdhc2zz4+wuzWTHxuC1/iqIhx5k=",
+  "public_key": "QOaGRnN0I9nypBQHTdhc2zz4+wuzWTHxuC1/iqIhx5k=",
   "private_key": "apo7oiseo1lIKAAGvPtF0laEzmYPiTguLLf2iTA9tsY=",
   "electors":{
     "4001":"SoEXXLPenWPOO/TMAi13rIzhy3JVxyxunPDhZTm/EOE=",

@@ -2,6 +2,8 @@ use std::fmt::{self, Debug, Formatter};
 use std::time::SystemTime;
 use crypto::sha2::Sha256;
 use crypto::digest::Digest;
+use std::collections::HashMap;
+use ed25519_dalek::PublicKey;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
@@ -116,12 +118,12 @@ impl Default for NormalBlockBody {
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfiglBlockBody{
-    pub list_of_elector_nodes: Vec<String>,
+    pub list_of_elector_nodes: HashMap<u64, PublicKey>,
     pub current_leader_id: u64
 }
 
 impl ConfiglBlockBody{
-    pub fn new(list_of_elector_nodes: Vec<String>, current_leader_id: u64) -> Self {
+    pub fn new(list_of_elector_nodes: HashMap<u64, PublicKey>, current_leader_id: u64) -> Self {
         ConfiglBlockBody{
             list_of_elector_nodes,
             current_leader_id
@@ -131,8 +133,9 @@ impl ConfiglBlockBody{
 
 impl Default for ConfiglBlockBody {
     fn default() -> ConfiglBlockBody {
+        let electors: HashMap<u64, PublicKey>  = HashMap::new();
         ConfiglBlockBody{
-            list_of_elector_nodes: vec![],
+            list_of_elector_nodes:  electors,
             current_leader_id: 0
         }
     }

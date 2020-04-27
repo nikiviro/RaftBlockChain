@@ -84,16 +84,16 @@ fn main() {
     // println!("private key: {:?}", encoded_private_key);
 
     let mut is_raft_node = true;
-    let config_json = load_config_from_file(config_file_name);
+    let config = load_config_from_file(config_file_name);
 
     let genesis_config = load_genessis_config();
 
-    if config_json.nodes_without_raft.contains(&this_peer_port.to_string()){
+    if config.nodes_without_raft.contains(&this_peer_port.to_string()){
         is_raft_node = false;
         println!("No-RAFT node")
     }
 
-    let config = Arc::new(NodeConfig::new(config_json));
+    let config = Arc::new(config);
 
     let mut node = Node::new(this_peer_port, config);
 
@@ -112,7 +112,7 @@ fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
     }
 }
 
-pub fn load_config_from_file(file_name: String) -> ConfigStructJson {
+pub fn load_config_from_file(file_name: String) -> NodeConfig {
 
     let config_dir = "config/".to_string();
     let mut config = ConfigLoader::default();
@@ -123,7 +123,7 @@ pub fn load_config_from_file(file_name: String) -> ConfigStructJson {
     println!("\n{:?} \n\n-----------",
              &configstruct);
 
-    configstruct
+    NodeConfig::new(configstruct)
 }
 
 pub fn load_genessis_config() -> ConfiglBlockBody{
@@ -132,11 +132,20 @@ pub fn load_genessis_config() -> ConfiglBlockBody{
     config
         .merge(File::with_name("config/genesis.json")).unwrap();
     // Print out our settings (as a HashMap)
-    let genesis_config =  config.try_into::<ConfiglBlockBody>().unwrap();
+    let genesis_config =  config.try_into::<GenesisConfigStructJson>().unwrap();
     println!("\n{:?} \n\n-----------",
              &genesis_config);
 
-    genesis_config
+
+    // convert HashMap<String, String> from json to HashMap<u64, PublicKey>
+    let mut list_of_elector_nodes: HashMap<u64, PublicKey>  = HashMap::new();
+    for (key, value) in genesis_config.list_of_elector_nodes {
+        let node_id = u64::from_str(key.as_ref()).expect("json config file in bad format - elector_id");
+        let node_public_key = PublicKey::from_bytes( &base64::decode(value).unwrap()).unwrap();
+        list_of_elector_nodes.insert(node_id,node_public_key);
+    }
+
+    ConfiglBlockBody::new(list_of_elector_nodes, 0)
 }
 
 pub fn now () -> u128 {
@@ -154,7 +163,7 @@ pub struct
 ConfigStructJson {
     pub nodes_without_raft: Vec<String>,
     pub node_id: u64,
-    pub publick_key: String,
+    pub public_key: String,
     pub private_key: String,
     pub electors: HashMap<String, String>
 }
@@ -170,7 +179,7 @@ NodeConfig {
 
 impl NodeConfig{
     pub fn new(config_from_json: ConfigStructJson) -> Self{
-        let public_key = PublicKey::from_bytes( &base64::decode(config_from_json.publick_key).unwrap()).unwrap();
+        let public_key = PublicKey::from_bytes( &base64::decode(config_from_json.public_key).unwrap()).unwrap();
         let private_key = SecretKey::from_bytes( &base64::decode(config_from_json.private_key).unwrap()).unwrap();
 
         let key_pair = Keypair{
@@ -190,4 +199,11 @@ impl NodeConfig{
             electors,
         }
     }
+}
+
+#[derive(Serialize, Deserialize,Debug)]
+pub struct
+GenesisConfigStructJson {
+    pub list_of_elector_nodes: HashMap<String, String>,
+    pub current_leader_id: u64
 }

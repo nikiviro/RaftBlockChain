@@ -126,16 +126,16 @@ fn handle_receieved_message (received_message: NetworkMessage, node_client: Send
                 Some(public_key) => {
                    match received_message.check_signature(&public_key){
                        true => {
-                           info!("[RAFT MESSAGE SIGNATURE CORRECT]")
+                           debug!("[RAFT MESSAGE SIGNATURE CORRECT]")
                        },
                        false =>  {
-                           info!("[RAFT MESSAGE SIGNATURE INCORRECT]");
+                           debug!("[RAFT MESSAGE SIGNATURE INCORRECT]");
                            return;
                        }
                    }
                 }
                 None => {
-                    info!("[RAFT MESSAGE UKNOWN NODE] - Received raft message from node with unknown public key");
+                    debug!("[RAFT MESSAGE UKNOWN NODE] - Received raft message from node with unknown public key");
                     return;
                 }
             }
