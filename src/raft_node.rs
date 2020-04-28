@@ -11,11 +11,11 @@ use raft::storage::MemStorage;
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
-use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType};
+use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType, RequestBlockMessage};
 use crate::now;
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
-use crate::blockchain::block::{BlockType, ConfiglBlockBody};
+use crate::blockchain::block::{BlockType, ConfiglBlockBody, BlockBody};
 
 pub struct RaftNode {
     // None if the raft is not initialized.
@@ -24,7 +24,6 @@ pub struct RaftNode {
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub is_node_without_raft: bool,
-    pub uncommited_block_queue: HashMap<String, Block>
 }
 
 impl RaftNode {
@@ -66,8 +65,7 @@ impl RaftNode {
             raw_node: raft,
             network_manager_sender: network_manager,
             blockchain: block_chain,
-            is_node_without_raft: false,
-            uncommited_block_queue: HashMap::new()
+            is_node_without_raft: false
         }
     }
 
@@ -216,8 +214,9 @@ impl RaftNode {
 
                     if raw_node.raft.state == StateRole::Leader{
                         //TODO: Do not create new block, but load it from uncommited block que
-                        if self.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
-                            match self.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
+                        if block_chain.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
+                            //TODO: make find/remove methods for uncomiited block que in blockchain.rs
+                            match block_chain.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
                                 Some(block) => {
                                     block_chain.add_block(block.clone());
                                     info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
@@ -234,8 +233,8 @@ impl RaftNode {
                         }
                     }
                     else{
-                        if self.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
-                            match self.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
+                        if block_chain.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
+                            match block_chain.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
                                 Some(block) => {
                                     block_chain.add_block(block.clone());
                                     info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
@@ -271,13 +270,50 @@ impl RaftNode {
 
     pub fn on_raft_message(&mut self, message: &[u8]){
         let raft_message = protobuf::parse_from_bytes::<Message>(message).unwrap();
-        self.step(raft_message);
+
+        let raw_node = match self.raw_node {
+            Some(ref mut r) => r,
+            // When Node::raft is `None` it means the the node was not initialized
+            _ => panic!("Raft is not innitialized"),
+        };
+
+        let mut should_be_processed = true;
+        //If message is block append request - first validate block
+        if raw_node.raft.state == StateRole::Follower
+            && raft_message.msg_type == MessageType::MsgAppend
+            && raft_message.entries.len() > 0 && !raft_message.entries[0].get_data().is_empty()
+            && raft_message.entries[0].get_entry_type() == EntryType::EntryNormal
+        {
+            let raft_log_entry :RaftLogEntry = bincode::deserialize(&raft_message.entries[0].get_data()).unwrap();
+            should_be_processed = self.handle_block_append_request(raft_log_entry);
+        }
+
+        if should_be_processed{
+            self.step(raft_message);
+        }
+    }
+
+    pub fn handle_block_append_request(&mut self,  raft_log_entry: RaftLogEntry) -> bool{
+
+
+        if self.blockchain.read().expect("BlockChain Lock is poisoned").uncommited_block_queue.contains_key(&raft_log_entry.block_hash)
+        {
+                debug!("Raft block append accepted - [HAVE BLOCK]");
+                true
+        }
+        else{
+            //Request block from other peers
+            let message_to_send = NetworkMessageType::RequestBlock(RequestBlockMessage::new(self.id,raft_log_entry.block_id, raft_log_entry.block_hash));
+            self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+            debug!("Raft block append denied - [DONT HAVE BLOCK]");
+            false
+        }
     }
 
     pub fn on_block_new(&mut self, block: Block) {
         let block_id = block.header.block_id;
         let block_hash = block.hash();
-        self.uncommited_block_queue.insert(block_hash, block.clone());
+        self.blockchain.write().expect("BlockChain Lock is poisoned").uncommited_block_queue.insert(block_hash, block.clone());
         //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
         info!("[RECEIVED BLOCK - {}] Received new block {:?} - block was added to uncommitted block que", block.hash(), block);
     }
