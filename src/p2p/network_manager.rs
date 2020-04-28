@@ -34,15 +34,16 @@ impl NetworkManager {
 
     pub fn add_new_peer(
         &mut self,
+        ip_address: String,
         port: u64
     ){
-        self.peers.insert(port,Peer::new(port,&self.zero_mq_context));
+        self.peers.insert(port,Peer::new(ip_address,port,&self.zero_mq_context));
     }
 
     pub fn start(&mut self) {
 
-        for (peer_port, address) in self.config.nodes_to_connect.clone(){
-            self.add_new_peer(peer_port.clone());
+        for (peer_port, ip_address) in self.config.nodes_to_connect.clone(){
+            self.add_new_peer(ip_address,peer_port);
         }
         self.listen(self.config.node_id);
 

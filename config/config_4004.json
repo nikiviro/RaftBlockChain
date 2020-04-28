@@ -4,8 +4,8 @@
   "public_key": "2xbDh95/29pp7elzdwyucUiz9G8PXnVhrQ9cc1vC0GA=",
   "private_key": "TepzBMCRNvLxIq9eg6Fc3TmxlK1iYDc2ytTT5hS8zl4=",
   "nodes_to_connect":{
-    "4001":"",
-    "4002":"",
-    "4003":"",
-    "9001":""}
+    "4001":"127.0.0.1",
+    "4002":"127.0.0.1",
+    "4003":"127.0.0.1",
+    "9001":"127.0.0.1"}
 }

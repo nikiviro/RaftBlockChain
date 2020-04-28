@@ -4,8 +4,8 @@
   "public_key": "4+vov/gxnaBs2OUIXK7K1FVrc+NZyBYliocJZJvUscs=",
   "private_key": "sW77QN0fvHMcD95jDcf1xQNzs+71mFXDz3bflKrOdsY=",
   "nodes_to_connect":{
-    "4001":"",
-    "4002":"",
-    "4004":"",
-    "9001":""}
+    "4001":"127.0.0.1",
+    "4002":"127.0.0.1",
+    "4004":"127.0.0.1",
+    "9001":"127.0.0.1"}
 }
