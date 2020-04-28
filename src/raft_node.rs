@@ -16,6 +16,7 @@ use crate::now;
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
 use crate::blockchain::block::{BlockType, ConfiglBlockBody, BlockBody};
+use std::time::Instant;
 
 pub struct RaftNode {
     // None if the raft is not initialized.
@@ -23,7 +24,17 @@ pub struct RaftNode {
     pub raw_node: Option<RawNode<MemStorage>>,
     pub network_manager_sender: Sender<NetworkManagerMessage>,
     pub blockchain: Arc<RwLock<Blockchain>>,
-    pub is_node_without_raft: bool,
+    pub leader_state: Option<LeaderState>,
+    follower_state: Option<FollowerState>,
+}
+
+pub enum LeaderState {
+    Building(Instant), // Instant is when the block started being built
+    Proposing,
+}
+
+enum FollowerState {
+    Idle
 }
 
 impl RaftNode {
@@ -65,7 +76,8 @@ impl RaftNode {
             raw_node: raft,
             network_manager_sender: network_manager,
             blockchain: block_chain,
-            is_node_without_raft: false
+            leader_state: None,
+            follower_state: Some(FollowerState::Idle)
         }
     }
 
@@ -151,6 +163,18 @@ impl RaftNode {
         // Get the `Ready` with `RawNode::ready` interface.
         let mut ready = raw_node.ready();
 
+        let is_leader = raw_node.raft.state == StateRole::Leader;
+
+        //just become a leader
+        if is_leader && self.leader_state.is_none(){
+            self.leader_state = Some(LeaderState::Building(Instant::now()));
+        }
+
+        if !is_leader && self.leader_state.is_some(){
+            self.leader_state = None;
+            self.follower_state = Some(FollowerState::Idle);
+        }
+
         // Persistent raft logs. It's necessary because in `RawNode::advance` we stabilize
         // raft logs to the latest position.
         if let Err(e) = store.wl().append(ready.entries()) {
@@ -212,7 +236,7 @@ impl RaftNode {
 
                     let raft_log_entry :RaftLogEntry = bincode::deserialize(&entry.get_data()).unwrap();
 
-                    if raw_node.raft.state == StateRole::Leader{
+                    if is_leader{
                         //TODO: Do not create new block, but load it from uncommited block que
                         if block_chain.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
                             //TODO: make find/remove methods for uncomiited block que in blockchain.rs
@@ -223,6 +247,8 @@ impl RaftNode {
 
                                     let message_to_send = NetworkMessageType::BlockNew(block_chain.get_last_block().unwrap());
                                     self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+
+                                    self.leader_state = Some(LeaderState::Building(Instant::now()));
                                 },
                                 None => panic!("Raft leader committed block which is not in its uncommitted block que - hash:{}!",&raft_log_entry.block_hash)
                             }

@@ -1,5 +1,5 @@
 use std::sync::mpsc::{Receiver, TryRecvError, Sender};
-use crate::{Update, RaftNode, Proposal, Block, now, RaftMessage};
+use crate::{Update, RaftNode, Proposal, Block, now, RaftMessage, LeaderState};
 use std::thread;
 use std::time::{Duration, Instant};
 use raft::storage::MemStorage;
@@ -37,7 +37,7 @@ impl RaftEngine {
             network_manager_sender: network_manager,
             raft_engine_client: tx,
             raft_engine_receiver: rx,
-            raft_node_id: raft_node_id,
+            raft_node_id: raft_node_id
         }
     }
 
@@ -96,7 +96,9 @@ impl RaftEngine {
                 }
 
                 //Add new Block
-                if new_block_timer.elapsed() >= Duration::from_millis(100) {
+                if new_block_timer.elapsed() >= Duration::from_millis(100) &&
+                    match raft_node.leader_state { Some(LeaderState::Proposing) => false, _ => true }
+                {
                     let mut new_block_id;
                     let new_block;
                     if let Some(last_block) = block_chain.read().expect("BlockChain Lock is poisoned").get_last_block() {
@@ -112,6 +114,9 @@ impl RaftEngine {
                     println!("| Created new block - {} {}|",new_block_id, new_block.hash());
                     println!("| ---------------------- |");
                     block_chain.write().expect("BlockChain Lock is poisoned").add_to_uncommitted_block_que(new_block.clone());
+
+                    //mark that leader is commiting block
+                    raft_node.leader_state = Some(LeaderState::Proposing);
                     let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
 
