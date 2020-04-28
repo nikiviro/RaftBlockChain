@@ -86,7 +86,7 @@ impl Node{
                             let mut blockchain = block_chain.write().expect("BlockChain Lock is poisoned");
 
                             if !blockchain.is_known_block(&block_hash){
-                                blockchain.uncommited_block_queue.insert(block_hash, block.clone());
+                                blockchain.add_to_uncommitted_block_que( block.clone());
                                 //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
                                 info!("[RECEIVED BLOCK - {}] Received new block {:?} - block was added to uncommitted block que", block.hash(), block);
                                 if self.raft_engine_client.is_some(){

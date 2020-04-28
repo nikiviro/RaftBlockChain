@@ -47,4 +47,14 @@ impl Blockchain {
         self.block_hash_map.contains_key(block_hash) ||
             self.uncommited_block_queue.contains_key(block_hash)
     }
+
+    pub fn remove_from_uncommitted_block_que(&mut self, block_hash: &String) -> Option<Block> {
+        info!("Removed from uncommited block que - {}", block_hash);
+        self.uncommited_block_queue.remove(block_hash)
+    }
+
+    pub fn add_to_uncommitted_block_que(&mut self, block: Block) -> Option<Block> {
+        info!("Added to uncommited block que - {}", block.hash());
+        self.uncommited_block_queue.insert(block.hash(), block)
+    }
 }

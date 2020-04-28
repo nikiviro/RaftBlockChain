@@ -216,7 +216,7 @@ impl RaftNode {
                         //TODO: Do not create new block, but load it from uncommited block que
                         if block_chain.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
                             //TODO: make find/remove methods for uncomiited block que in blockchain.rs
-                            match block_chain.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
+                            match block_chain.remove_from_uncommitted_block_que(&raft_log_entry.block_hash) {
                                 Some(block) => {
                                     block_chain.add_block(block.clone());
                                     info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
@@ -224,17 +224,17 @@ impl RaftNode {
                                     let message_to_send = NetworkMessageType::BlockNew(block_chain.get_last_block().unwrap());
                                     self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
                                 },
-                                None => panic!("Raft leader committed block which is not in its uncommitted block que!")
+                                None => panic!("Raft leader committed block which is not in its uncommitted block que - hash:{}!",&raft_log_entry.block_hash)
                             }
                         }
                         else{
                             //Leader must have committed block in uncommitted block que, because block was created by this leader
-                            panic!("Raft leader committed block which is not in its uncommitted block que!");
+                            panic!("Raft leader committed block which is not in its uncommitted block que - hash:{}!",&raft_log_entry.block_hash)
                         }
                     }
                     else{
                         if block_chain.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
-                            match block_chain.uncommited_block_queue.remove(&raft_log_entry.block_hash) {
+                            match block_chain.remove_from_uncommitted_block_que(&raft_log_entry.block_hash) {
                                 Some(block) => {
                                     block_chain.add_block(block.clone());
                                     info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);

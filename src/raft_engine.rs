@@ -96,7 +96,7 @@ impl RaftEngine {
                 }
 
                 //Add new Block
-                if new_block_timer.elapsed() >= Duration::from_secs(20) {
+                if new_block_timer.elapsed() >= Duration::from_millis(100) {
                     let mut new_block_id;
                     let new_block;
                     if let Some(last_block) = block_chain.read().expect("BlockChain Lock is poisoned").get_last_block() {
@@ -111,9 +111,9 @@ impl RaftEngine {
                     println!("| ---------------------- |");
                     println!("| Created new block - {} {}|",new_block_id, new_block.hash());
                     println!("| ---------------------- |");
+                    block_chain.write().expect("BlockChain Lock is poisoned").add_to_uncommitted_block_que(new_block.clone());
                     let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
-                    block_chain.write().expect("BlockChain Lock is poisoned").uncommited_block_queue.insert(new_block.hash(), new_block.clone());
 
                     let message_to_send = NetworkMessageType::BlockNew(new_block);
                     self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
