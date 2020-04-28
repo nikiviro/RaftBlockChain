@@ -2,7 +2,7 @@ use std::fmt::{self, Debug, Formatter};
 use std::time::SystemTime;
 use crypto::sha2::Sha256;
 use crypto::digest::Digest;
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 use ed25519_dalek::PublicKey;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -25,8 +25,6 @@ pub struct BlockHeader{
     //Trailer - This will not be hashed
     //pub block_hash: String,
     //pub block_size: u64, // Size of this block in bytes
-
-
 }
 
 impl Debug for Block {
@@ -118,12 +116,12 @@ impl Default for NormalBlockBody {
 }
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfiglBlockBody{
-    pub list_of_elector_nodes: HashMap<u64, PublicKey>,
+    pub list_of_elector_nodes: BTreeMap<u64, PublicKey>,
     pub current_leader_id: u64
 }
 
 impl ConfiglBlockBody{
-    pub fn new(list_of_elector_nodes: HashMap<u64, PublicKey>, current_leader_id: u64) -> Self {
+    pub fn new(list_of_elector_nodes: BTreeMap<u64, PublicKey>, current_leader_id: u64) -> Self {
         ConfiglBlockBody{
             list_of_elector_nodes,
             current_leader_id
@@ -133,7 +131,7 @@ impl ConfiglBlockBody{
 
 impl Default for ConfiglBlockBody {
     fn default() -> ConfiglBlockBody {
-        let electors: HashMap<u64, PublicKey>  = HashMap::new();
+        let electors: BTreeMap<u64, PublicKey>  = BTreeMap::new();
         ConfiglBlockBody{
             list_of_elector_nodes:  electors,
             current_leader_id: 0

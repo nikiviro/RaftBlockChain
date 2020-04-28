@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, BTreeMap};
 
 use crate::p2p::peer::Peer;
 use zmq::{Context, Sendable};
@@ -113,7 +113,7 @@ impl NetworkManager {
 }
 
 
-fn handle_receieved_message (received_message: NetworkMessage, node_client: Sender<NodeMessage>, elector_list: &HashMap<u64, PublicKey>){
+fn handle_receieved_message (received_message: NetworkMessage, node_client: Sender<NodeMessage>, elector_list: &BTreeMap<u64, PublicKey>){
 
     match received_message.message_type {
         NetworkMessageType::BlockNew(block) => {

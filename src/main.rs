@@ -11,7 +11,7 @@ extern crate base64;
 
 
 use std::thread;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque, BTreeMap};
 use std::env;
 use std::process::exit;
 use std::sync::{Arc, Mutex, RwLock};
@@ -118,7 +118,7 @@ pub fn load_config(config_file_name: String, genesis_file_name: String) -> (Node
     let genesis_json = load_genesis_config(genesis_file_name);
 
     // convert HashMap<String, String> from json to HashMap<u64, PublicKey>
-    let mut list_of_elector_nodes: HashMap<u64, PublicKey>  = HashMap::new();
+    let mut list_of_elector_nodes: BTreeMap<u64, PublicKey>  = BTreeMap::new();
     for (key, value) in genesis_json.list_of_elector_nodes {
         let node_id = u64::from_str(key.as_ref()).expect("json config file in bad format - elector_id");
         let node_public_key = PublicKey::from_bytes( &base64::decode(value).unwrap()).unwrap();
@@ -187,11 +187,11 @@ NodeConfig {
     pub node_id: u64,
     pub key_pair: Keypair,
     pub nodes_to_connect: HashMap<u64, String>,
-    pub electors: HashMap<u64, PublicKey>
+    pub electors: BTreeMap<u64, PublicKey>
 }
 
 impl NodeConfig{
-    pub fn new_from_config_json(config_from_json: ConfigStructJson, electors: HashMap<u64, PublicKey>) -> Self{
+    pub fn new_from_config_json(config_from_json: ConfigStructJson, electors: BTreeMap<u64, PublicKey>) -> Self{
         let public_key = PublicKey::from_bytes( &base64::decode(config_from_json.public_key).unwrap()).unwrap();
         let private_key = SecretKey::from_bytes( &base64::decode(config_from_json.private_key).unwrap()).unwrap();
 

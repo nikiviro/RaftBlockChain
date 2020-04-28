@@ -109,7 +109,7 @@ impl RaftEngine {
                         new_block = Block::genesis(genesis_config.clone(), self.raft_node_id)
                     }
                     println!("| ---------------------- |");
-                    println!("| Created new block - {} |",new_block_id);
+                    println!("| Created new block - {} {}|",new_block_id, new_block.hash());
                     println!("| ---------------------- |");
                     let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
