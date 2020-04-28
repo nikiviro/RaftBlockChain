@@ -140,6 +140,13 @@ fn handle_receieved_message (received_message: NetworkMessage, node_client: Send
                 }
             }
             node_client.send(NodeMessage::RaftMessage(raft_message.clone()));
+        },
+        NetworkMessageType::RequestBlock( block_request) => {
+            debug!("[BLOCK REQUEST MESSAGE] - Received block request message: {:?}", block_request);
+            node_client.send(NodeMessage::RequestBlock(block_request));
+        },
+        NetworkMessageType::RequestBlockResponse(block) => {
+            node_client.send(NodeMessage::BlockNew(block));
         }
         _ => warn!("Unhandled network message received: {:?}", received_message),
     }
@@ -182,7 +189,9 @@ impl BroadCastRequest{
 #[derive(Debug,Serialize, Deserialize, Clone)]
 pub enum NetworkMessageType {
     BlockNew(Block),
-    RaftMessage(RaftMessage)
+    RaftMessage(RaftMessage),
+    RequestBlock(RequestBlockMessage),
+    RequestBlockResponse(Block)
 }
 
 #[derive(Debug,Serialize, Deserialize)]
@@ -219,5 +228,22 @@ impl NetworkMessage{
     }
     pub fn check_signature(&self, public_key: &PublicKey) -> bool {
         public_key.verify(&self.get_bytes_for_signature(), &self.signature).is_ok()
+    }
+}
+
+#[derive(Debug,Serialize, Deserialize, Clone)]
+pub struct RequestBlockMessage{
+    pub requester_id: u64,
+    pub block_id: u64,
+    pub block_hash: String,
+}
+
+impl RequestBlockMessage{
+    pub fn new(requester_id: u64, block_id: u64, block_hash: String) -> Self {
+        RequestBlockMessage{
+            requester_id,
+            block_id,
+            block_hash
+        }
     }
 }
