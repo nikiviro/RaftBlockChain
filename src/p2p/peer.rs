@@ -16,7 +16,7 @@ impl Peer {
     ) -> Self {
         let dealer_socket = context.socket(zmq::DEALER).unwrap();
         dealer_socket
-            .connect(format!("tcp://localhost:{}", peer_port.to_string()).as_ref())
+            .connect(format!("tcp://{}:{}", peer_ip, peer_port.to_string()).as_ref())
             .expect("Failed to connect to peer");
 
         Peer {
