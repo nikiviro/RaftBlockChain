@@ -113,7 +113,7 @@ impl RaftEngine {
                     println!("| ---------------------- |");
                     let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
-                    raft_node.uncommited_block_queue.insert(new_block.hash(), new_block.clone());
+                    block_chain.write().expect("BlockChain Lock is poisoned").uncommited_block_queue.insert(new_block.hash(), new_block.clone());
 
                     let message_to_send = NetworkMessageType::BlockNew(new_block);
                     self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));

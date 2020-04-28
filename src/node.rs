@@ -1,4 +1,4 @@
-use crate::p2p::network_manager::NetworkManager;
+use crate::p2p::network_manager::{NetworkManager, RequestBlockMessage, NetworkMessageType, NetworkManagerMessage, SendToRequest};
 use crate::raft_engine::{RaftEngine, RaftNodeMessage};
 use std::thread;
 use std::sync::{Mutex, mpsc, RwLock, Arc};
@@ -37,6 +37,8 @@ impl Node{
 
         let mut network_manager = NetworkManager::new(self.node_client.clone(), self.config.clone());
 
+        let network_manager_sender = network_manager.network_manager_sender.clone();
+
         let raft_engine = match is_raft_node {
             true => Some(RaftEngine::new(network_manager.network_manager_sender.clone(), self.config.node_id.clone())),
             _ => None
@@ -55,8 +57,9 @@ impl Node{
 
             let mut raft_engine = raft_engine.expect("Raft engine is not initialized");
 
+            let block_chain_raft_engine = block_chain.clone();
             let handle = thread::spawn( move || {
-                raft_engine.start( block_chain.clone(), genesis_config);
+                raft_engine.start( block_chain_raft_engine, genesis_config);
             }
 
             );
@@ -90,6 +93,18 @@ impl Node{
                             if self.raft_engine_client.is_some(){
                                 self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::RaftMessage(raft_message));
                             }
+                        },
+                        NodeMessage::RequestBlock(block_request) => {
+
+                            let blockchain = block_chain.read().expect("BlockChain Lock is poisoned");
+                            if let Some(block) = blockchain.find_block(block_request.block_id, block_request.block_hash) {
+                                info!("[HAVE REQUESTED BLOCK] Sending RequestBlockMessageResponse {:?}",block);
+                                let message_to_send = NetworkMessageType::RequestBlockResponse(block);
+                                network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(block_request.requester_id, message_to_send)));
+
+                            }else{
+                                info!("[DONT HAVE REQUESTED BLOCK]");
+                            }
                         }
                         _ => warn!("Unhandled update: {:?}", message),
                     }
@@ -115,7 +130,8 @@ impl Node{
 #[derive(Debug,Serialize, Deserialize)]
 pub enum NodeMessage {
     BlockNew(Block),
-    RaftMessage(RaftMessage)
+    RaftMessage(RaftMessage),
+    RequestBlock(RequestBlockMessage),
 }
 
 fn add_new_raft_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
