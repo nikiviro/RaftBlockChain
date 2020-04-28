@@ -5,6 +5,7 @@ pub mod block;
 
 pub struct Blockchain {
     pub blocks: Vec<block::Block>,
+    block_hash_map: HashMap<String, Block>,
     pub uncommited_block_queue: HashMap<String, Block>
 }
 
@@ -12,13 +13,16 @@ impl Blockchain {
     pub fn new () -> Self {
         Blockchain {
             blocks: vec![],
+            block_hash_map: HashMap::new(),
             uncommited_block_queue: HashMap::new()
         }
     }
 
     pub fn add_block (&mut self, block: block::Block) {
 
-        self.blocks.push(block);
+        self.blocks.push(block.clone());
+
+        self.block_hash_map.insert(block.hash(), block);
     }
 
     pub fn get_last_block(& self) -> Option<Block> {
@@ -37,5 +41,10 @@ impl Blockchain {
                 None
             }
         }
+    }
+
+    pub fn is_known_block(&self, block_hash: &String) -> bool {
+        self.block_hash_map.contains_key(block_hash) ||
+            self.uncommited_block_queue.contains_key(block_hash)
     }
 }

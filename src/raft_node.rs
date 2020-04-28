@@ -311,11 +311,6 @@ impl RaftNode {
     }
 
     pub fn on_block_new(&mut self, block: Block) {
-        let block_id = block.header.block_id;
-        let block_hash = block.hash();
-        self.blockchain.write().expect("BlockChain Lock is poisoned").uncommited_block_queue.insert(block_hash, block.clone());
-        //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
-        info!("[RECEIVED BLOCK - {}] Received new block {:?} - block was added to uncommitted block que", block.hash(), block);
     }
 }
 #[derive(Debug,Serialize, Deserialize)]
