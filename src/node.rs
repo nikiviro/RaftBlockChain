@@ -81,16 +81,17 @@ impl Node{
                 Ok(message) => {
                     match message {
                         NodeMessage::BlockNew(block) => {
-                            let block_id = block.header.block_id;
                             let block_hash = block.hash();
                             let mut blockchain = block_chain.write().expect("BlockChain Lock is poisoned");
 
                             if !blockchain.is_known_block(&block_hash){
-                                blockchain.add_to_uncommitted_block_que( block.clone());
-                                //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
-                                info!("[RECEIVED BLOCK - {}] Received new block {:?} - block was added to uncommitted block que", block.hash(), block);
-                                if self.raft_engine_client.is_some(){
-                                    self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::BlockNew(block));
+                                info!("[RECEIVED BLOCK - {}] Received new block {:?}", block.hash(), block);
+                                if block.is_valid(&self.config.electors){
+                                    blockchain.add_to_uncommitted_block_que( block.clone());
+                                    //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
+                                    if self.raft_engine_client.is_some(){
+                                        self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::BlockNew(block));
+                                    }
                                 }
                             }
                         },

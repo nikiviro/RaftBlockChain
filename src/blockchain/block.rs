@@ -4,6 +4,7 @@ use crypto::sha2::Sha256;
 use crypto::digest::Digest;
 use std::collections::{HashMap, BTreeMap};
 use ed25519_dalek::{PublicKey, Signature, Keypair};
+use crate::Blockchain;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
@@ -86,6 +87,28 @@ impl Block {
         hasher.input(&data);
         // read hash digest
         hasher.result_str()
+    }
+
+    pub fn is_valid(&self, elector_list: &BTreeMap<u64, PublicKey>) -> bool{
+
+        match elector_list.get(&self.header.proposer){
+            Some(public_key) => {
+                match public_key.verify(&self.hash().as_bytes(), &self.block_trailer.proposer_signature).is_ok(){
+                    true => {
+                        debug!("[BLOCK SIGNATURE CORRECT]");
+                        return true
+                    },
+                    false =>  {
+                        debug!("[BLOCK SIGNATURE INCORRECT]");
+                        return false
+                    }
+                }
+            }
+            None => {
+                debug!("[BLOCK CREATED BY UNKNOWN NODE] - Received block from node with unknown public key");
+                return false
+            }
+        }
     }
 }
 
@@ -190,7 +213,7 @@ impl BlockTrailer{
         // read hash digest
         let hash = hasher.result_str();
 
-        let signature = key_pair.sign(&data);
+        let signature = key_pair.sign(&hash.as_bytes());
 
         BlockTrailer{
             proposer_signature: signature
