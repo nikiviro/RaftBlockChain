@@ -25,7 +25,17 @@ impl Blockchain {
         self.block_hash_map.insert(block.hash(), block);
     }
 
-    pub fn get_last_block(& self) -> Option<Block> {
+    pub fn block_extends_chain_head(& self, block: &Block) -> bool{
+
+        match self.get_chain_head() {
+            //Check if this block prev_block_hash is equal to current head block hash
+            Some(head_block) => block.header.prev_block_hash == head_block.hash(),
+            // If there is no block in the blockchain - accept
+            _ => true
+        }
+    }
+
+    pub fn get_chain_head(& self) -> Option<Block> {
         self.blocks.last().cloned()
     }
 

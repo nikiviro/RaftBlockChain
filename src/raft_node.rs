@@ -242,13 +242,18 @@ impl RaftNode {
                             //TODO: make find/remove methods for uncomiited block que in blockchain.rs
                             match block_chain.remove_from_uncommitted_block_que(&raft_log_entry.block_hash) {
                                 Some(block) => {
-                                    block_chain.add_block(block.clone());
-                                    info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
+                                    if block_chain.block_extends_chain_head(&block){
+                                        block_chain.add_block(block.clone());
+                                        info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
 
-                                    let message_to_send = NetworkMessageType::BlockNew(block_chain.get_last_block().unwrap());
-                                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                                        let message_to_send = NetworkMessageType::BlockNew(block_chain.get_chain_head().unwrap());
+                                        self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
 
-                                    self.leader_state = Some(LeaderState::Building(Instant::now()));
+                                        self.leader_state = Some(LeaderState::Building(Instant::now()));
+                                    }
+                                    else{
+                                        panic!("Committed block does not extend current chain head");
+                                    }
                                 },
                                 None => panic!("Raft leader committed block which is not in its uncommitted block que - hash:{}!",&raft_log_entry.block_hash)
                             }
@@ -262,10 +267,16 @@ impl RaftNode {
                         if block_chain.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
                             match block_chain.remove_from_uncommitted_block_que(&raft_log_entry.block_hash) {
                                 Some(block) => {
-                                    block_chain.add_block(block.clone());
-                                    info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
-                                    let message_to_send = NetworkMessageType::BlockNew(block_chain.get_last_block().unwrap());
-                                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+
+                                    if block_chain.block_extends_chain_head(&block){
+                                        block_chain.add_block(block.clone());
+                                        info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
+                                        let message_to_send = NetworkMessageType::BlockNew(block_chain.get_chain_head().unwrap());
+                                        self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                                    }
+                                    else{
+                                        panic!("Committed block does not extend current chain head");
+                                    }
                                 },
                                 None => panic!("Raft follower committed block which is not in its uncommitted block que!")
                             }
@@ -321,18 +332,28 @@ impl RaftNode {
 
     pub fn handle_block_append_request(&mut self,  raft_log_entry: RaftLogEntry) -> bool{
 
+        info!("[HANDLING BLOCK APPEND REQUEST]");
+        let block_chain = self.blockchain.read().expect("BlockChain Lock is poisoned");
 
-        if self.blockchain.read().expect("BlockChain Lock is poisoned").uncommited_block_queue.contains_key(&raft_log_entry.block_hash)
-        {
-                info!("Raft block append accepted - [HAVE BLOCK]");
-                true
-        }
-        else{
-            //Request block from other peers
-            let message_to_send = NetworkMessageType::RequestBlock(RequestBlockMessage::new(self.id,raft_log_entry.block_id, raft_log_entry.block_hash));
-            self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
-            info!("Raft block append denied - [DONT HAVE BLOCK]");
-            false
+        match block_chain.uncommited_block_queue.get(&raft_log_entry.block_hash){
+            Some(block) => {
+                info!("[HAVE BLOCK TO APPEND]");
+                if block_chain.block_extends_chain_head(block){
+                    info!("[BLOCK EXTEND CURRENT CHAIN] - Raft block append accepted");
+                    return true;
+                }
+                else{
+                    info!("[BLOCK DOES NOT EXTEND CURRENT CHAIN] - Raft block append denied");
+                    return false;
+                }
+            }
+            _ => {
+                //Request block from other peers
+                let message_to_send = NetworkMessageType::RequestBlock(RequestBlockMessage::new(self.id,raft_log_entry.block_id, raft_log_entry.block_hash));
+                self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                info!("[DONT HAVE BLOCK] - Raft block append denied");
+                false
+            }
         }
     }
 

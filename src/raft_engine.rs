@@ -101,10 +101,10 @@ impl RaftEngine {
                 {
                     let mut new_block_id;
                     let new_block;
-                    if let Some(last_block) = block_chain.read().expect("BlockChain Lock is poisoned").get_last_block() {
+                    if let Some(last_block) = block_chain.read().expect("BlockChain Lock is poisoned").get_chain_head() {
                         new_block_id = last_block.header.block_id + 1;
                         new_block = Block::new(new_block_id, 1,BlockType::Normal,
-                                               0,"1".to_string(), self.config.node_id, &self.config.key_pair);
+                                               0,last_block.hash(), self.config.node_id, &self.config.key_pair);
 
                     }else {
                         //First block - genesis
