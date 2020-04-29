@@ -96,7 +96,7 @@ impl RaftEngine {
                 }
 
                 //Add new Block
-                if new_block_timer.elapsed() >= Duration::from_millis(100) &&
+                if new_block_timer.elapsed() >= Duration::from_millis(10000) &&
                     match raft_node.leader_state { Some(LeaderState::Proposing) => false, _ => true }
                 {
                     let mut new_block_id;
@@ -127,24 +127,24 @@ impl RaftEngine {
                 }
             }
 
-            let x = match raft_node.raw_node {
-                Some(ref mut r) => r,
-                // When Node::raft is `None` it means the the node was not initialized
-                _ => continue,
-            };
-
-
-            //If node is follower - reset leader_stop_timer every time
-            if x.raft.state == StateRole::Follower{
-                leader_stop_timer = Instant::now();
-            }
-            //if node is Leader for longer then 60 seconds - sleep node threed, new leader should
-            //be elected and after wake up this node should catch current log and blockchain state
-            if x.raft.state == StateRole::Leader && block_chain.read().expect("BlockChain Lock is poisoned").blocks.len() >3 && leader_stop_timer.elapsed() >= Duration::from_secs(60){
-                info!("[SLEEP] Leader {:?} is going to sleep for 60 seconds - new election should be held.\n", x.raft.id);
-                thread::sleep(Duration::from_secs(30));
-                leader_stop_timer = Instant::now();
-            }
+            // let x = match raft_node.raw_node {
+            //     Some(ref mut r) => r,
+            //     // When Node::raft is `None` it means the the node was not initialized
+            //     _ => continue,
+            // };
+            //
+            //
+            // //If node is follower - reset leader_stop_timer every time
+            // if x.raft.state == StateRole::Follower{
+            //     leader_stop_timer = Instant::now();
+            // }
+            // //if node is Leader for longer then 60 seconds - sleep node threed, new leader should
+            // //be elected and after wake up this node should catch current log and blockchain state
+            // if x.raft.state == StateRole::Leader && block_chain.read().expect("BlockChain Lock is poisoned").blocks.len() >3 && leader_stop_timer.elapsed() >= Duration::from_secs(60){
+            //     info!("[SLEEP] Leader {:?} is going to sleep for 60 seconds - new election should be held.\n", x.raft.id);
+            //     thread::sleep(Duration::from_secs(30));
+            //     leader_stop_timer = Instant::now();
+            // }
             raft_node.on_ready();
 
         }

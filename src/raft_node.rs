@@ -29,7 +29,7 @@ pub struct RaftNode {
 }
 
 pub enum LeaderState {
-    Building(Instant), // Instant is when the block started being built
+    Building(Instant),
     Proposing,
 }
 
@@ -193,7 +193,7 @@ impl RaftNode {
 
         // Send out the messages come from the node.
         for msg in ready.messages.drain(..) {
-            //info!("Sending message:{:?}",msg);
+            info!("Sending message:{:?}", msg);
             let to = msg.get_to();
             let message_to_send = NetworkMessageType::RaftMessage(RaftMessage::new(msg));
             self.network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(to, message_to_send)));
@@ -324,14 +324,14 @@ impl RaftNode {
 
         if self.blockchain.read().expect("BlockChain Lock is poisoned").uncommited_block_queue.contains_key(&raft_log_entry.block_hash)
         {
-                debug!("Raft block append accepted - [HAVE BLOCK]");
+                info!("Raft block append accepted - [HAVE BLOCK]");
                 true
         }
         else{
             //Request block from other peers
             let message_to_send = NetworkMessageType::RequestBlock(RequestBlockMessage::new(self.id,raft_log_entry.block_id, raft_log_entry.block_hash));
             self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
-            debug!("Raft block append denied - [DONT HAVE BLOCK]");
+            info!("Raft block append denied - [DONT HAVE BLOCK]");
             false
         }
     }
