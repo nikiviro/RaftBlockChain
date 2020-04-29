@@ -1,5 +1,5 @@
 use std::sync::mpsc::{Receiver, TryRecvError, Sender};
-use crate::{Update, RaftNode, Proposal, Block, now, RaftMessage, LeaderState};
+use crate::{Update, RaftNode, Proposal, Block, now, RaftMessage, LeaderState, NodeConfig};
 use std::thread;
 use std::time::{Duration, Instant};
 use raft::storage::MemStorage;
@@ -22,13 +22,15 @@ pub struct RaftEngine {
     pub raft_engine_client: Sender<RaftNodeMessage>,
     raft_engine_receiver: Receiver<RaftNodeMessage>,
     raft_node_id: u64,
+    config: Arc<NodeConfig>,
 }
 
 impl RaftEngine {
 
     pub fn new(
         network_manager: Sender<NetworkManagerMessage>,
-        raft_node_id: u64
+        raft_node_id: u64,
+        node_config: Arc<NodeConfig>,
     ) -> Self{
         let (tx, rx) = mpsc::channel();
         RaftEngine {
@@ -37,7 +39,8 @@ impl RaftEngine {
             network_manager_sender: network_manager,
             raft_engine_client: tx,
             raft_engine_receiver: rx,
-            raft_node_id: raft_node_id
+            raft_node_id: raft_node_id,
+            config: node_config
         }
     }
 
@@ -103,12 +106,13 @@ impl RaftEngine {
                     let new_block;
                     if let Some(last_block) = block_chain.read().expect("BlockChain Lock is poisoned").get_last_block() {
                         new_block_id = last_block.header.block_id + 1;
-                        new_block = Block::new(new_block_id, 1,BlockType::Normal,0,"1".to_string());
+                        new_block = Block::new(new_block_id, 1,BlockType::Normal,
+                                               0,"1".to_string(), self.config.node_id, &self.config.key_pair);
 
                     }else {
                         //First block - genesis
                         new_block_id = 1;
-                        new_block = Block::genesis(genesis_config.clone(), self.raft_node_id)
+                        new_block = Block::genesis(genesis_config.clone(), self.config.node_id, &self.config.key_pair)
                     }
                     println!("| ---------------------- |");
                     println!("| Created new block - {} {}|",new_block_id, new_block.hash());

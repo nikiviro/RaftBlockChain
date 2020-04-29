@@ -3,24 +3,24 @@ use std::time::SystemTime;
 use crypto::sha2::Sha256;
 use crypto::digest::Digest;
 use std::collections::{HashMap, BTreeMap};
-use ed25519_dalek::PublicKey;
+use ed25519_dalek::{PublicKey, Signature, Keypair};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Block {
     pub header: BlockHeader,
-    pub block_body: BlockBody
-    //pub list_of_nodes: Vec<u64>,
+    pub block_body: BlockBody,
+    pub block_trailer: BlockTrailer
 }
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BlockHeader{
     pub block_id: u64,
-    pub epoch_seq_num: u64, // Every block has its sequence number in epoch
+    pub epoch_seq_num: u64, //Unimplemented
     pub block_type: BlockType, //Type of block (Normal, Configuration ..)
     pub prev_block_size: u64, //Size of previous block in bytes
-    //pub color_id: String, // Identification of color and its space this block belongs to
     pub timestamp: u128,
     pub prev_block_hash: String,
+    pub proposer: u64, //if of the leader who created this block
     //TODO: Move this to trailer
     //Trailer - This will not be hashed
     //pub block_hash: String,
@@ -41,7 +41,7 @@ impl Debug for Block {
 impl Block {
 
     pub fn new (block_id: u64, epoch_seq_num: u64, block_type: BlockType, prev_block_size: u64,
-                prev_block_hash: String) -> Self {
+                prev_block_hash: String, proposer_id: u64, key_pair: &Keypair) -> Self {
         let block_body = match block_type {
             BlockType::Normal => {
                 let block_body_string = format!("{}{}","This is block with id ".to_string(), block_id.to_string());
@@ -49,26 +49,38 @@ impl Block {
             },
             BlockType::Config => BlockBody::Config(ConfiglBlockBody::default()),
         };
+
+        let block_header = BlockHeader::new(block_id,epoch_seq_num,
+                                            block_type,prev_block_size,
+                                            prev_block_hash, proposer_id);
+
+        let block_trailer = BlockTrailer::new(&block_header, &block_body, key_pair);
+
         Block {
-            header: BlockHeader::new(block_id,epoch_seq_num,
-                                     block_type,prev_block_size,
-                                     prev_block_hash),
-            block_body: block_body
+            header: block_header,
+            block_body: block_body,
+            block_trailer: block_trailer,
         }
     }
 
-    pub fn genesis(genesis_block_body: ConfiglBlockBody, leader_id: u64) -> Self{
+    pub fn genesis(genesis_block_body: ConfiglBlockBody, leader_id: u64, key_pair: &Keypair) -> Self{
+
+        let block_header = BlockHeader::new(1,1,
+                                            BlockType::Config,0,
+                                            "1".to_string(), leader_id);
+        let block_body = BlockBody::Config(genesis_block_body);
+        let block_trailer = BlockTrailer::new(&block_header, &block_body, key_pair);
         Block {
-            header: BlockHeader::new(1,1,
-                                     BlockType::Config,0,
-                                     "1".to_string()),
-            block_body: BlockBody::Config(genesis_block_body)
+            header: block_header,
+            block_body: block_body,
+            block_trailer: block_trailer
         }
     }
 
     pub fn hash(&self) -> String{
         //Get block bytes
-        let mut data = bincode::serialize(&self).expect("Error while serializing block");
+        let mut data = bincode::serialize(&self.header).expect("Error while serializing block header");
+        data.extend( bincode::serialize(&self.block_body).expect("Error while serializing block body"));
         let mut hasher = Sha256::new();
         // write input message
         hasher.input(&data);
@@ -80,7 +92,7 @@ impl Block {
 impl BlockHeader {
 
     pub fn new (block_id: u64, epoch_seq_num: u64, block_type: BlockType, prev_block_size: u64,
-                prev_block_hash: String) -> Self
+                prev_block_hash: String, proposer_id: u64) -> Self
     {
         BlockHeader {
             block_id: block_id,
@@ -89,7 +101,8 @@ impl BlockHeader {
             prev_block_size: prev_block_size,
             timestamp: SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)
                 .expect("Time went backwards").as_secs() as u128,
-            prev_block_hash: prev_block_hash
+            prev_block_hash: prev_block_hash,
+            proposer: proposer_id
         }
     }
 }
@@ -159,4 +172,29 @@ impl fmt::Display for BlockType {
 pub enum BlockBody {
     Normal(NormalBlockBody),
     Config(ConfiglBlockBody)
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct BlockTrailer{
+    pub proposer_signature: Signature, //leader signature of this block hash
+}
+
+impl BlockTrailer{
+    pub fn new(block_header: &BlockHeader, block_body: &BlockBody, key_pair: &Keypair) -> Self {
+
+        let mut data = bincode::serialize(block_header).expect("Error while serializing block header");
+        data.extend( bincode::serialize(block_body).expect("Error while serializing block body"));
+        let mut hasher = Sha256::new();
+        // write input message
+        hasher.input(&data);
+        // read hash digest
+        let hash = hasher.result_str();
+
+        let signature = key_pair.sign(&data);
+
+        BlockTrailer{
+            proposer_signature: signature
+        }
+
+    }
 }
