@@ -21,7 +21,6 @@ pub struct RaftEngine {
     network_manager_sender: Sender<NetworkManagerMessage>,
     pub raft_engine_client: Sender<RaftNodeMessage>,
     raft_engine_receiver: Receiver<RaftNodeMessage>,
-    raft_node_id: u64,
     config: Arc<NodeConfig>,
 }
 
@@ -29,7 +28,6 @@ impl RaftEngine {
 
     pub fn new(
         network_manager: Sender<NetworkManagerMessage>,
-        raft_node_id: u64,
         node_config: Arc<NodeConfig>,
     ) -> Self{
         let (tx, rx) = mpsc::channel();
@@ -39,7 +37,6 @@ impl RaftEngine {
             network_manager_sender: network_manager,
             raft_engine_client: tx,
             raft_engine_receiver: rx,
-            raft_node_id: raft_node_id,
             config: node_config
         }
     }
@@ -54,7 +51,7 @@ impl RaftEngine {
         let mut new_block_timer = Instant::now();
 
         let mut raft_node = RaftNode::new(
-            self.raft_node_id,
+            self.config.node_id,
             self.network_manager_sender.clone(),
             genesis_config.clone(),
             block_chain.clone()
@@ -154,13 +151,6 @@ impl RaftEngine {
         }
 
     }
-
-    pub fn on_block_new(&self, block_chain: Arc<RwLock<Blockchain>>, block: Block) {
-        let block_id = block.header.block_id;
-        block_chain.write().expect("Blockchain is poisoned").add_block(block);
-        println!("Node {} added new block at index {}", self.raft_node_id, block_id);
-    }
-
     fn handle_update(&self, raft_node: &mut RaftNode, update: RaftNodeMessage) -> bool {
         match update {
             RaftNodeMessage::BlockNew(block) => raft_node.on_block_new( block),

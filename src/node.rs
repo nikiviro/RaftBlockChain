@@ -40,7 +40,7 @@ impl Node{
         let network_manager_sender = network_manager.network_manager_sender.clone();
 
         let raft_engine = match is_raft_node {
-            true => Some(RaftEngine::new(network_manager.network_manager_sender.clone(), self.config.node_id.clone())),
+            true => Some(RaftEngine::new(network_manager.network_manager_sender.clone(), self.config.clone())),
             _ => None
         };
 
