@@ -39,6 +39,10 @@ impl Blockchain {
         self.blocks.last().cloned()
     }
 
+    pub fn remove_head(&mut self){
+        self.blocks.remove(self.blocks.len()-1);
+    }
+
     pub fn find_block(&self, block_id: u64, block_hash: String) -> Option<Block> {
         if let Some(block) = self.blocks.iter().find(|&block| block.header.block_id == block_id) {
             Some(block.clone())

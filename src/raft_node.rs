@@ -26,6 +26,7 @@ pub struct RaftNode {
     pub blockchain: Arc<RwLock<Blockchain>>,
     pub leader_state: Option<LeaderState>,
     follower_state: Option<FollowerState>,
+    current_leader: u64,
 }
 
 pub enum LeaderState {
@@ -77,7 +78,8 @@ impl RaftNode {
             network_manager_sender: network_manager,
             blockchain: block_chain,
             leader_state: None,
-            follower_state: Some(FollowerState::Idle)
+            follower_state: Some(FollowerState::Idle),
+            current_leader: 0
         }
     }
 
@@ -163,6 +165,8 @@ impl RaftNode {
         // Get the `Ready` with `RawNode::ready` interface.
         let mut ready = raw_node.ready();
 
+        self.current_leader = raw_node.raft.leader_id;
+
         let is_leader = raw_node.raft.state == StateRole::Leader;
 
         //just become a leader
@@ -242,17 +246,25 @@ impl RaftNode {
                             //TODO: make find/remove methods for uncomiited block que in blockchain.rs
                             match block_chain.remove_from_uncommitted_block_que(&raft_log_entry.block_hash) {
                                 Some(block) => {
-                                    if block_chain.block_extends_chain_head(&block){
-                                        block_chain.add_block(block.clone());
-                                        info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
+                                    if block.header.proposer == self.current_leader {
 
-                                        let message_to_send = NetworkMessageType::BlockNew(block_chain.get_chain_head().unwrap());
-                                        self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                                        if block_chain.block_extends_chain_head(&block){
+                                            block_chain.add_block(block.clone());
+                                            info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
 
+                                            let message_to_send = NetworkMessageType::BlockNew(block_chain.get_chain_head().unwrap());
+                                            self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+
+                                            self.leader_state = Some(LeaderState::Building(Instant::now()));
+                                        }
+                                        else{
+                                            panic!("Committed block does not extend current chain head");
+                                        }
+
+                                    }else{
+                                        info!("[BLOCK DISCARDED - {}] block was not created by current leader: {:?}", block.hash(), block);
+                                        //NO OP - we dont accept block from node which is not current leader
                                         self.leader_state = Some(LeaderState::Building(Instant::now()));
-                                    }
-                                    else{
-                                        panic!("Committed block does not extend current chain head");
                                     }
                                 },
                                 None => panic!("Raft leader committed block which is not in its uncommitted block que - hash:{}!",&raft_log_entry.block_hash)
@@ -268,14 +280,21 @@ impl RaftNode {
                             match block_chain.remove_from_uncommitted_block_que(&raft_log_entry.block_hash) {
                                 Some(block) => {
 
-                                    if block_chain.block_extends_chain_head(&block){
-                                        block_chain.add_block(block.clone());
-                                        info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
-                                        let message_to_send = NetworkMessageType::BlockNew(block_chain.get_chain_head().unwrap());
-                                        self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
-                                    }
-                                    else{
-                                        panic!("Committed block does not extend current chain head");
+                                    if block.header.proposer == self.current_leader{
+                                        if block_chain.block_extends_chain_head(&block){
+                                            block_chain.add_block(block.clone());
+                                            info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
+                                            info!("[LEADER ID - {}] ", self.current_leader);
+                                            let message_to_send = NetworkMessageType::BlockNew(block_chain.get_chain_head().unwrap());
+                                            self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                                        }
+                                        else{
+                                            panic!("Committed block does not extend current chain head");
+                                        }
+                                    }else{
+                                        info!("[BLOCK DISCARDED - {}] block was not created by current leader: {:?}", block.hash(), block);
+                                        //NO OP - we dont accept block from node which is not current leader
+                                        self.leader_state = Some(LeaderState::Building(Instant::now()));
                                     }
                                 },
                                 None => panic!("Raft follower committed block which is not in its uncommitted block que!")
@@ -333,7 +352,7 @@ impl RaftNode {
     pub fn handle_block_append_request(&mut self,  raft_log_entry: RaftLogEntry) -> bool{
 
         info!("[HANDLING BLOCK APPEND REQUEST]");
-        let block_chain = self.blockchain.read().expect("BlockChain Lock is poisoned");
+        let mut block_chain = self.blockchain.write().expect("BlockChain Lock is poisoned");
 
         match block_chain.uncommited_block_queue.get(&raft_log_entry.block_hash){
             Some(block) => {
@@ -343,6 +362,17 @@ impl RaftNode {
                     return true;
                 }
                 else{
+                    //special case - leader must have crashed during block propagation and appended committed block after recover to blockchain,
+                    //he was not current leader anymore but he didnt know about that at that time, so we need to remove that block from blockchain
+                    if block_chain.blocks.len() >=2
+                        && block_chain.blocks[block_chain.blocks.len()-2].header.proposer == self.id
+                        && block_chain.blocks[block_chain.blocks.len()-2].hash() ==  block.header.prev_block_hash
+                    {
+                        info!("[BLOCK DOES NOT EXTEND CURRENT CHAIN - ACCEPTED] - Removed current head");
+                        block_chain.remove_head();
+                        return true;
+                    }
+
                     info!("[BLOCK DOES NOT EXTEND CURRENT CHAIN] - Raft block append denied");
                     return false;
                 }
