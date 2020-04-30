@@ -83,12 +83,9 @@ fn main() {
     // let encoded_private_key = base64::encode(&private_key_bytes);
     // println!("private key: {:?}", encoded_private_key);
 
-    let mut is_raft_node = true;
-
     let (config, genesis_config) = load_config(config_file_name, "genesis.json".to_string());
 
-    if config.nodes_without_raft.contains(&this_peer_port.to_string()){
-        is_raft_node = false;
+    if !config.is_elector_node{
         println!("No-RAFT node")
     }
 
@@ -96,7 +93,7 @@ fn main() {
 
     let mut node = Node::new(this_peer_port, config);
 
-    node.start(is_raft_node, genesis_config)
+    node.start( genesis_config)
 }
 
 fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
@@ -159,7 +156,6 @@ pub fn load_genesis_config(file_name: String) -> GenesisConfigStructJson{
 
     genesis_config
 }
-
 pub fn now () -> u128 {
     let duration = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -173,7 +169,7 @@ pub fn now () -> u128 {
 #[derive(Serialize, Deserialize,Debug)]
 pub struct
 ConfigStructJson {
-    pub nodes_without_raft: Vec<String>,
+    pub is_elector_node: bool,
     pub node_id: u64,
     pub public_key: String,
     pub private_key: String,
@@ -183,7 +179,7 @@ ConfigStructJson {
 #[derive(Debug)]
 pub struct
 NodeConfig {
-    pub nodes_without_raft: Vec<String>,
+    pub is_elector_node: bool,
     pub node_id: u64,
     pub key_pair: Keypair,
     pub nodes_to_connect: HashMap<u64, String>,
@@ -208,7 +204,7 @@ impl NodeConfig{
 
 
         NodeConfig{
-            nodes_without_raft: config_from_json.nodes_without_raft,
+            is_elector_node: config_from_json.is_elector_node,
             node_id: config_from_json.node_id,
             key_pair,
             nodes_to_connect,
