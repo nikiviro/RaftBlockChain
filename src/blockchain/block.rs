@@ -21,11 +21,7 @@ pub struct BlockHeader{
     pub prev_block_size: u64, //Size of previous block in bytes
     pub timestamp: u128,
     pub prev_block_hash: String,
-    pub proposer: u64, //if of the leader who created this block
-    //TODO: Move this to trailer
-    //Trailer - This will not be hashed
-    //pub block_hash: String,
-    //pub block_size: u64, // Size of this block in bytes
+    pub proposer: u64, //id of the leader who created this block
 }
 
 impl Debug for Block {
@@ -214,7 +210,6 @@ impl BlockTrailer{
         let hash = hasher.result_str();
 
         let signature = key_pair.sign(&hash.as_bytes());
-
         BlockTrailer{
             proposer_signature: signature
         }

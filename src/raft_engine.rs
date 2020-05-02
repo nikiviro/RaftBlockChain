@@ -81,11 +81,6 @@ impl RaftEngine {
                 // Reset timer
                 t = Instant::now();
             }
-
-
-            // Let the leader pick pending proposals from the global queue.
-            //TODO: Propose new block only when the block is valid
-            //TODO: Make sure that new block block will be proposed after previous block was finally committed/rejected by network
             if raft.raft.state == StateRole::Leader {
                 // Handle new proposals.
                 for p in self.proposals_global.iter_mut().skip_while(|p| p.proposed > 0) {
@@ -96,8 +91,8 @@ impl RaftEngine {
                 }
 
                 //Add new Block
-                if new_block_timer.elapsed() >= Duration::from_millis(10000) &&
-                    match raft_node.leader_state { Some(LeaderState::Proposing) => false, _ => true }
+                if new_block_timer.elapsed() >= Duration::from_millis(10000)
+                    && match raft_node.leader_state { Some(LeaderState::Proposing) => false, _ => true }
                 {
                     let mut new_block_id;
                     let new_block;

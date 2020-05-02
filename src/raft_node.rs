@@ -241,9 +241,7 @@ impl RaftNode {
                     let raft_log_entry :RaftLogEntry = bincode::deserialize(&entry.get_data()).unwrap();
 
                     if is_leader{
-                        //TODO: Do not create new block, but load it from uncommited block que
                         if block_chain.uncommited_block_queue.contains_key(&raft_log_entry.block_hash){
-                            //TODO: make find/remove methods for uncomiited block que in blockchain.rs
                             match block_chain.remove_from_uncommitted_block_que(&raft_log_entry.block_hash) {
                                 Some(block) => {
                                     if block.header.proposer == self.current_leader {
