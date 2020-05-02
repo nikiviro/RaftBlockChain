@@ -149,14 +149,16 @@ impl Default for NormalBlockBody {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ConfiglBlockBody{
     pub list_of_elector_nodes: BTreeMap<u64, PublicKey>,
-    pub current_leader_id: u64
+    pub current_leader_id: u64,
+    pub pace_of_block_creation: u64,
 }
 
 impl ConfiglBlockBody{
-    pub fn new(list_of_elector_nodes: BTreeMap<u64, PublicKey>, current_leader_id: u64) -> Self {
+    pub fn new(list_of_elector_nodes: BTreeMap<u64, PublicKey>, current_leader_id: u64, pace_of_block_creation: u64) -> Self {
         ConfiglBlockBody{
             list_of_elector_nodes,
-            current_leader_id
+            current_leader_id,
+            pace_of_block_creation
         }
     }
 }
@@ -166,7 +168,8 @@ impl Default for ConfiglBlockBody {
         let electors: BTreeMap<u64, PublicKey>  = BTreeMap::new();
         ConfiglBlockBody{
             list_of_elector_nodes:  electors,
-            current_leader_id: 0
+            current_leader_id: 0,
+            pace_of_block_creation: 10000
         }
     }
 }
@@ -213,6 +216,5 @@ impl BlockTrailer{
         BlockTrailer{
             proposer_signature: signature
         }
-
     }
 }

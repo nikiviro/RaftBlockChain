@@ -122,9 +122,9 @@ pub fn load_config(config_file_name: String, genesis_file_name: String) -> (Node
         list_of_elector_nodes.insert(node_id,node_public_key);
     }
 
-    let genesis = ConfiglBlockBody::new(list_of_elector_nodes, 0);
+    let genesis = ConfiglBlockBody::new(list_of_elector_nodes, 0, genesis_json.pace_of_block_creation);
 
-    let config = NodeConfig::new_from_config_json(config_json, genesis.list_of_elector_nodes.clone());
+    let config = NodeConfig::new_from_config_json(config_json, genesis.list_of_elector_nodes.clone(), genesis.pace_of_block_creation);
 
     (config, genesis)
 }
@@ -183,11 +183,12 @@ NodeConfig {
     pub node_id: u64,
     pub key_pair: Keypair,
     pub nodes_to_connect: HashMap<u64, String>,
-    pub electors: BTreeMap<u64, PublicKey>
+    pub electors: BTreeMap<u64, PublicKey>,
+    pub pace_of_block_creation: u64,
 }
 
 impl NodeConfig{
-    pub fn new_from_config_json(config_from_json: ConfigStructJson, electors: BTreeMap<u64, PublicKey>) -> Self{
+    pub fn new_from_config_json(config_from_json: ConfigStructJson, electors: BTreeMap<u64, PublicKey>, pace_of_block_creation: u64) -> Self{
         let public_key = PublicKey::from_bytes( &base64::decode(config_from_json.public_key).unwrap()).unwrap();
         let private_key = SecretKey::from_bytes( &base64::decode(config_from_json.private_key).unwrap()).unwrap();
 
@@ -209,6 +210,7 @@ impl NodeConfig{
             key_pair,
             nodes_to_connect,
             electors,
+            pace_of_block_creation
         }
     }
 }
@@ -217,5 +219,6 @@ impl NodeConfig{
 pub struct
 GenesisConfigStructJson {
     pub list_of_elector_nodes: HashMap<String, String>,
-    pub current_leader_id: u64
+    pub current_leader_id: u64,
+    pub pace_of_block_creation: u64,
 }

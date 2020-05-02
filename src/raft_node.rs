@@ -376,7 +376,7 @@ impl RaftNode {
                     }
                 }
                 else{
-
+                    info!("[BLOCK WAS NOT CREATED BY CURRENT LEADER] - Raft block append denied");
                     return false
                 }
             }

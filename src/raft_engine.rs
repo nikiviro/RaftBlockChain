@@ -46,7 +46,7 @@ impl RaftEngine {
         mut block_chain: Arc<RwLock<Blockchain>>,
         genesis_config: ConfiglBlockBody
     ){
-        let mut t = Instant::now();
+        let mut raft_tick_timer = Instant::now();
         let mut leader_stop_timer = Instant::now();
         let mut new_block_timer = Instant::now();
 
@@ -75,11 +75,11 @@ impl RaftEngine {
                 _ => continue,
             };
 
-            if t.elapsed() >= RAFT_TICK_TIMEOUT {
+            if raft_tick_timer.elapsed() >= RAFT_TICK_TIMEOUT {
                 // Tick the raft.
                 raft.tick();
                 // Reset timer
-                t = Instant::now();
+                raft_tick_timer = Instant::now();
             }
             if raft.raft.state == StateRole::Leader {
                 // Handle new proposals.
@@ -91,7 +91,7 @@ impl RaftEngine {
                 }
 
                 //Add new Block
-                if new_block_timer.elapsed() >= Duration::from_millis(10000)
+                if new_block_timer.elapsed() >= Duration::from_millis(self.config.pace_of_block_creation)
                     && match raft_node.leader_state { Some(LeaderState::Proposing) => false, _ => true }
                 {
                     let mut new_block_id;
