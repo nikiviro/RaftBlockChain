@@ -292,7 +292,6 @@ impl RaftNode {
                                     }else{
                                         info!("[BLOCK DISCARDED - {}] block was not created by current leader: {:?}", block.hash(), block);
                                         //NO OP - we dont accept block from node which is not current leader
-                                        self.leader_state = Some(LeaderState::Building(Instant::now()));
                                     }
                                 },
                                 None => panic!("Raft follower committed block which is not in its uncommitted block que!")

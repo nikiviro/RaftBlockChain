@@ -111,7 +111,7 @@ impl RaftEngine {
                     println!("| ---------------------- |");
                     block_chain.write().expect("BlockChain Lock is poisoned").add_to_uncommitted_block_que(new_block.clone());
 
-                    //mark that leader is commiting block
+                    //mark that leader is proposing block
                     raft_node.leader_state = Some(LeaderState::Proposing);
                     let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
