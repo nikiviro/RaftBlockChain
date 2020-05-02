@@ -12,7 +12,7 @@ pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType, RequestBlockMessage};
-use crate::now;
+use crate::{now, NodeConfig};
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
 use crate::blockchain::block::{BlockType, ConfiglBlockBody, BlockBody};
@@ -44,7 +44,7 @@ impl RaftNode {
         id: u64,
         network_manager: Sender<NetworkManagerMessage>,
         genesis_config: ConfiglBlockBody,
-        block_chain: Arc<RwLock<Blockchain>>
+        block_chain: Arc<RwLock<Blockchain>>,
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut rng = rand::thread_rng();
@@ -79,7 +79,7 @@ impl RaftNode {
             blockchain: block_chain,
             leader_state: None,
             follower_state: Some(FollowerState::Idle),
-            current_leader: 0
+            current_leader: 0,
         }
     }
 
@@ -354,24 +354,30 @@ impl RaftNode {
         match block_chain.uncommited_block_queue.get(&raft_log_entry.block_hash){
             Some(block) => {
                 info!("[HAVE BLOCK TO APPEND]");
-                if block_chain.block_extends_chain_head(block){
-                    info!("[BLOCK EXTEND CURRENT CHAIN] - Raft block append accepted");
-                    return true;
-                }
-                else{
-                    //special case - leader must have crashed during block propagation and appended committed block after recover to blockchain,
-                    //he was not current leader anymore but he didnt know about that at that time, so we need to remove that block from blockchain
-                    if block_chain.blocks.len() >=2
-                        && block_chain.blocks[block_chain.blocks.len()-2].header.proposer == self.id
-                        && block_chain.blocks[block_chain.blocks.len()-2].hash() ==  block.header.prev_block_hash
-                    {
-                        info!("[BLOCK DOES NOT EXTEND CURRENT CHAIN - ACCEPTED] - Removed current head");
-                        block_chain.remove_head();
+                if block.header.proposer == self.current_leader{
+                    info!("[BLOCK CREATED BY CURRENT LEADER - OK]");
+                    if block_chain.block_extends_chain_head(block){
+                        info!("[BLOCK EXTEND CURRENT CHAIN - OK] - Raft block append accepted");
                         return true;
                     }
+                    else{
+                        //special case - leader must have crashed during block propagation and appended committed block after recover to blockchain,
+                        //he was not current leader anymore but he didnt know about that at that time, so we need to remove that block from blockchain
+                        if block_chain.blocks.len() >=2
+                            && block_chain.blocks[block_chain.blocks.len()-2].header.proposer == self.id
+                            && block_chain.blocks[block_chain.blocks.len()-2].hash() ==  block.header.prev_block_hash
+                        {
+                            info!("[BLOCK DOES NOT EXTEND CURRENT CHAIN] - Removed current head - denied");
+                            block_chain.remove_head();
+                            return false;
+                        }
+                        info!("[BLOCK DOES NOT EXTEND CURRENT CHAIN] - Raft block append denied");
+                        return false;
+                    }
+                }
+                else{
 
-                    info!("[BLOCK DOES NOT EXTEND CURRENT CHAIN] - Raft block append denied");
-                    return false;
+                    return false
                 }
             }
             _ => {

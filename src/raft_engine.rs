@@ -54,7 +54,7 @@ impl RaftEngine {
             self.config.node_id,
             self.network_manager_sender.clone(),
             genesis_config.clone(),
-            block_chain.clone()
+            block_chain.clone(),
         );
 
         loop {
