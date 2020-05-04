@@ -11,7 +11,6 @@ use std::rc::Rc;
 
 
 pub struct Node{
-    this_peer_port: u64,
     node_client: Sender<NodeMessage>,
     node_receiver: Receiver<NodeMessage>,
     raft_engine_client: Option<Sender<RaftNodeMessage>>,
@@ -20,10 +19,9 @@ pub struct Node{
 
 impl Node{
 
-    pub fn new(this_peer_port: u64, config: Arc<NodeConfig>) -> Self {
+    pub fn new(config: Arc<NodeConfig>) -> Self {
         let (tx, rx) = mpsc::channel();
         Node{
-            this_peer_port,
             node_client: tx,
             node_receiver: rx,
             raft_engine_client: None,

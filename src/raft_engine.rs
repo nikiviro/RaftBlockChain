@@ -1,5 +1,5 @@
 use std::sync::mpsc::{Receiver, TryRecvError, Sender};
-use crate::{Update, RaftNode, Proposal, Block, now, RaftMessage, LeaderState, NodeConfig};
+use crate::{Update, RaftNode, Proposal, Block, RaftMessage, LeaderState, NodeConfig};
 use std::thread;
 use std::time::{Duration, Instant};
 use raft::storage::MemStorage;

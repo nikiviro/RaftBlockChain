@@ -8,6 +8,7 @@ extern crate serde_derive;
 extern crate rand;
 extern crate ed25519_dalek;
 extern crate base64;
+extern crate clap;
 
 
 use std::thread;
@@ -29,6 +30,7 @@ use ed25519_dalek::{Keypair, PUBLIC_KEY_LENGTH, PublicKey, SecretKey};
 use ed25519_dalek::Signature;
 use base64::{encode, decode};
 use bincode::{serialize};
+use clap::{Arg, App, SubCommand};
 
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
@@ -54,57 +56,66 @@ mod node;
 
 fn main() {
     env_logger::init();
-    let args: Vec<String> = env::args().collect();
-    if args.len()<2 {
-        eprintln!("Problem parsing arguments: You need to specify how many nodes should be in cluster.  ",);
-        eprintln!("Example : Cargo run 'num_of_nodes'");
 
-        exit(1);
+    let matches = App::new("Raft Blockchain prototype")
+        .version("1.0")
+        .author("Nikolas Virostek")
+        .about("Prototype of blockchain network with modified Raft consensus protocol")
+        .arg(Arg::with_name("config")
+            .short("c")
+            .long("config")
+            .value_name("FILE")
+            .help("Sets a config file name")
+            .takes_value(true)
+            .required_unless("generate_keypair")
+            .required(true))
+        .arg(Arg::with_name("genesis")
+            .short("g")
+            .long("genesis")
+            .value_name("FILE")
+            .help("Sets a genesis file name")
+            .takes_value(true)
+            .required_unless("generate_keypair")
+            .required(true))
+        .arg(Arg::with_name("generate_keypair")
+            .long("generate_keypair")
+            .help("Generate public and private key for a new node")
+            .takes_value(false))
+        .get_matches();
+
+    //public, private key generation
+    if matches.is_present("generate_keypair"){
+        println!("Generating new key pair...");
+        let mut csprng = OsRng{};
+        let keypair: Keypair = Keypair::generate(&mut csprng);
+
+        let public_key_bytes: [u8; PUBLIC_KEY_LENGTH] = keypair.public.to_bytes();
+        let encoded_public_key = base64::encode(&public_key_bytes);
+        println!("public key: {:?}", encoded_public_key);
+        let private_key_bytes: [u8; PUBLIC_KEY_LENGTH] = keypair.secret.to_bytes();
+        let encoded_private_key = base64::encode(&private_key_bytes);
+        println!("private key: {:?}", encoded_private_key);
+        return;
     }
-    let is_leader_arg: u8= args[1].parse().unwrap();
-    let is_leader = is_leader_arg != 0;
-    let config_file_name: String =  args[2].parse().unwrap();
-    let this_peer_port: u64 = args[3].parse().unwrap();
-    let mut peer_list = Vec::new();
-    for x in 4..(args.len()){
-        println!("Peer: {}", args[x]);
-        let peer_port: u64 = args[x].parse().unwrap();
-        peer_list.push(peer_port);
-    }
 
-    // //public,private key generation
-    // let mut csprng = OsRng{};
-    // let keypair: Keypair = Keypair::generate(&mut csprng);
-    //
-    // let public_key_bytes: [u8; PUBLIC_KEY_LENGTH] = keypair.public.to_bytes();
-    // let encoded_public_key = base64::encode(&public_key_bytes);
-    // println!("public key: {:?}", encoded_public_key);
-    // let private_key_bytes: [u8; PUBLIC_KEY_LENGTH] = keypair.secret.to_bytes();
-    // let encoded_private_key = base64::encode(&private_key_bytes);
-    // println!("private key: {:?}", encoded_private_key);
+    // Gets a config file name
+    let config_file_name = matches.value_of("config").unwrap().to_string();
+    println!("Config file: {}", config_file_name);
 
-    let (config, genesis_config) = load_config(config_file_name, "genesis.json".to_string());
+    // Gets a genesis file name
+    let genesis_file_name = matches.value_of("genesis").unwrap().to_string();
+    println!("Genesis file: {}", genesis_file_name);
+
+    let (config, genesis_config) = load_config(config_file_name, genesis_file_name);
 
     if !config.is_elector_node{
         println!("No-RAFT node")
     }
 
     let config = Arc::new(config);
-
-    let mut node = Node::new(this_peer_port, config);
-
+    let mut node = Node::new( config);
+    //Start blockchain node
     node.start( genesis_config)
-}
-
-fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
-    let mut conf_change = ConfChange::default();
-    conf_change.set_node_id(node_id);
-    conf_change.set_change_type(ConfChangeType::AddNode);
-    let (proposal, rx) = Proposal::conf_change(&conf_change);
-    proposals.lock().unwrap().push_back(proposal);
-    if rx.recv().unwrap() {
-        println!("Node {:?} succesfully added to cluster", node_id);
-    }
 }
 
 pub fn load_config(config_file_name: String, genesis_file_name: String) -> (NodeConfig, ConfiglBlockBody){
@@ -156,15 +167,6 @@ pub fn load_genesis_config(file_name: String) -> GenesisConfigStructJson{
 
     genesis_config
 }
-pub fn now () -> u128 {
-    let duration = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        ;
-
-    duration.as_secs() as u128 * 1000 + duration.subsec_millis() as u128
-}
-
 
 #[derive(Serialize, Deserialize,Debug)]
 pub struct

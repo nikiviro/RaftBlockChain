@@ -12,7 +12,7 @@ pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
 use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType, RequestBlockMessage};
-use crate::{now, NodeConfig};
+use crate::NodeConfig;
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
 use crate::blockchain::block::{BlockType, ConfiglBlockBody, BlockBody};
