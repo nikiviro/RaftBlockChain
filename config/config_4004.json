@@ -1,5 +1,5 @@
 {
-  "nodes_without_raft":[ "9001", "2", "3" ],
+  "is_elector_node": true,
   "node_id": "4004",
   "public_key": "2xbDh95/29pp7elzdwyucUiz9G8PXnVhrQ9cc1vC0GA=",
   "private_key": "TepzBMCRNvLxIq9eg6Fc3TmxlK1iYDc2ytTT5hS8zl4=",

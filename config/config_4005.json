@@ -1,0 +1,13 @@
+{
+  "is_elector_node": true,
+  "node_id": "4005",
+  "public_key": "HhriR8ec1uUJpWumcE9N8+uWz+iEUdljBs1scIA259A=",
+  "private_key": "50TN8RgCe+rzTlDmgYjcp/MLcK5K4ulQcU9sYwTt2ZY=",
+  "nodes_to_connect":{
+    "4002":"85.135.234.218",
+    "4003":"85.135.234.218",
+    "4004":"85.135.234.218",
+    "4001":"127.0.0.1",
+    "4006":"127.0.0.1",
+    "9001":"85.135.234.218"}
+}
