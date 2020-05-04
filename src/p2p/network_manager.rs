@@ -80,7 +80,7 @@ impl NetworkManager {
                 let data = &msq[1];
                 let received_message: NetworkMessage = bincode::deserialize(&data).expect("Cannot deserialize update message");
                 //zeromq_sender.send(received_message);
-                handle_receieved_message(received_message, node_sender.clone(),&elector_list);
+                handle_received_message(received_message, node_sender.clone(), &elector_list);
 
             }
         );
@@ -114,7 +114,7 @@ impl NetworkManager {
 }
 
 
-fn handle_receieved_message (received_message: NetworkMessage, node_client: Sender<NodeMessage>, elector_list: &BTreeMap<u64, PublicKey>){
+fn handle_received_message(received_message: NetworkMessage, node_client: Sender<NodeMessage>, elector_list: &BTreeMap<u64, PublicKey>){
 
     match received_message.message_type {
         NetworkMessageType::BlockNew(block) => {

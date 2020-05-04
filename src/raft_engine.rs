@@ -89,8 +89,10 @@ impl RaftEngine {
                 for p in self.conf_change_proposals.iter_mut().skip_while(|p| p.proposed > 0) {
                     raft_node.propose(p);
                 }
-
-                //Add new Block
+                //Create new new blocK if:
+                //  - node is a leader
+                //  - time to create new block elapsed
+                //  - previous block was committed (leader is not proposing previous block)
                 if new_block_timer.elapsed() >= Duration::from_millis(self.config.pace_of_block_creation)
                     && match raft_node.leader_state { Some(LeaderState::Proposing) => false, _ => true }
                 {
@@ -109,9 +111,10 @@ impl RaftEngine {
                     println!("| ---------------------- |");
                     println!("| Created new block - {} {}|",new_block_id, new_block.hash());
                     println!("| ---------------------- |");
+                    //Add block to uncommitted block que
                     block_chain.write().expect("BlockChain Lock is poisoned").add_to_uncommitted_block_que(new_block.clone());
 
-                    //mark that leader is proposing block
+                    //Update leader state - leader is proposing block
                     raft_node.leader_state = Some(LeaderState::Proposing);
                     let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);

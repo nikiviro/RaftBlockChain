@@ -362,7 +362,7 @@ impl RaftNode {
                     }
                     else{
                         //special case - leader must have crashed during block propagation and appended committed block after recover to blockchain,
-                        //he was not current leader anymore but he didnt know about that at that time, so we need to remove that block from blockchain
+                        //at the time he committed the block he was not current leader anymore but he didnt know about that at that time, so we need to remove that block from blockchain
                         if block_chain.blocks.len() >=2
                             && block_chain.blocks[block_chain.blocks.len()-2].header.proposer == self.id
                             && block_chain.blocks[block_chain.blocks.len()-2].hash() ==  block.header.prev_block_hash
