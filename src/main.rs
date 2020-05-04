@@ -108,10 +108,6 @@ fn main() {
 
     let (config, genesis_config) = load_config(config_file_name, genesis_file_name);
 
-    if !config.is_elector_node{
-        println!("No-RAFT node")
-    }
-
     let config = Arc::new(config);
     let mut node = Node::new( config);
     //Start blockchain node
@@ -171,7 +167,6 @@ pub fn load_genesis_config(file_name: String) -> GenesisConfigStructJson{
 #[derive(Serialize, Deserialize,Debug)]
 pub struct
 ConfigStructJson {
-    pub is_elector_node: bool,
     pub node_id: u64,
     pub public_key: String,
     pub private_key: String,
@@ -181,7 +176,6 @@ ConfigStructJson {
 #[derive(Debug)]
 pub struct
 NodeConfig {
-    pub is_elector_node: bool,
     pub node_id: u64,
     pub key_pair: Keypair,
     pub nodes_to_connect: HashMap<u64, String>,
@@ -207,7 +201,6 @@ impl NodeConfig{
 
 
         NodeConfig{
-            is_elector_node: config_from_json.is_elector_node,
             node_id: config_from_json.node_id,
             key_pair,
             nodes_to_connect,

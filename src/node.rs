@@ -31,13 +31,25 @@ impl Node{
 
     pub fn start(&mut self, genesis_config: ConfiglBlockBody) {
 
+        let is_elecor_node = match genesis_config.list_of_elector_nodes.get(&self.config.node_id){
+            Some(public_key) => {
+                if &self.config.key_pair.public == public_key{
+                    true
+                }
+                else{
+                    false
+                }
+            }
+            _ => false
+        };
+
         let mut block_chain = Arc::new(RwLock::new(Blockchain::new()));
 
         let mut network_manager = NetworkManager::new(self.node_client.clone(), self.config.clone());
 
         let network_manager_sender = network_manager.network_manager_sender.clone();
 
-        let raft_engine = match self.config.is_elector_node {
+        let raft_engine = match is_elecor_node {
             true => Some(RaftEngine::new(network_manager.network_manager_sender.clone(), self.config.clone())),
             _ => None
         };
@@ -51,7 +63,7 @@ impl Node{
             network_manager.start()
         );
 
-        if(self.config.is_elector_node){
+        if(is_elecor_node){
 
             let mut raft_engine = raft_engine.expect("Raft engine is not initialized");
 
