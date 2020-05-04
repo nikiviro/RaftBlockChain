@@ -129,7 +129,7 @@ pub fn load_config(config_file_name: String, genesis_file_name: String) -> (Node
         list_of_elector_nodes.insert(node_id,node_public_key);
     }
 
-    let genesis = ConfiglBlockBody::new(list_of_elector_nodes, 0, genesis_json.pace_of_block_creation);
+    let genesis = ConfiglBlockBody::new(list_of_elector_nodes,genesis_json.pace_of_block_creation);
 
     let config = NodeConfig::new_from_config_json(config_json, genesis.list_of_elector_nodes.clone(), genesis.pace_of_block_creation);
 
@@ -214,6 +214,5 @@ impl NodeConfig{
 pub struct
 GenesisConfigStructJson {
     pub list_of_elector_nodes: HashMap<String, String>,
-    pub current_leader_id: u64,
     pub pace_of_block_creation: u64,
 }

@@ -11,7 +11,7 @@ use raft::storage::MemStorage;
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
-use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType, RequestBlockMessage};
+use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType, RequestBlockMessage, NewBlockInfo};
 use crate::NodeConfig;
 use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
@@ -86,7 +86,7 @@ impl RaftNode {
     // Step a raft message, initialize the raft if need.
     pub fn step(&mut self, msg: Message) {
         if (msg.msg_type != MessageType::MsgHeartbeat && msg.msg_type != MessageType::MsgHeartbeatResponse){
-            info!("Received raft message - type: {:?}, from:{:?}, commit:{:?}, entries:{:?}", msg.msg_type, msg.from, msg.commit, msg.entries);
+            debug!("Received raft message - type: {:?}, from:{:?}, commit:{:?}, entries:{:?}", msg.msg_type, msg.from, msg.commit, msg.entries);
         }
         if self.raw_node.is_none() {
             if is_initial_msg(&msg) {
@@ -197,7 +197,7 @@ impl RaftNode {
 
         // Send out the messages come from the node.
         for msg in ready.messages.drain(..) {
-            info!("Sending message:{:?}", msg);
+            debug!("Sending message:{:?}", msg);
             let to = msg.get_to();
             let message_to_send = NetworkMessageType::RaftMessage(RaftMessage::new(msg));
             self.network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(to, message_to_send)));
@@ -250,7 +250,7 @@ impl RaftNode {
                                             block_chain.add_block(block.clone());
                                             info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
 
-                                            let message_to_send = NetworkMessageType::BlockNew(block_chain.get_chain_head().unwrap());
+                                            let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.id, block.header.block_id, block.hash()));
                                             self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
 
                                             self.leader_state = Some(LeaderState::Building(Instant::now()));
@@ -282,8 +282,8 @@ impl RaftNode {
                                         if block_chain.block_extends_chain_head(&block){
                                             block_chain.add_block(block.clone());
                                             info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
-                                            info!("[LEADER ID - {}] ", self.current_leader);
-                                            let message_to_send = NetworkMessageType::BlockNew(block_chain.get_chain_head().unwrap());
+                                            info!("[CURRENT LEADER ID - {}] ", self.current_leader);
+                                            let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.id,block.header.block_id, block.hash()));
                                             self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
                                         }
                                         else{

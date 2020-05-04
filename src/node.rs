@@ -1,4 +1,4 @@
-use crate::p2p::network_manager::{NetworkManager, RequestBlockMessage, NetworkMessageType, NetworkManagerMessage, SendToRequest};
+use crate::p2p::network_manager::{NetworkManager, RequestBlockMessage, NetworkMessageType, NetworkManagerMessage, SendToRequest, NewBlockInfo, BroadCastRequest};
 use crate::raft_engine::{RaftEngine, RaftNodeMessage};
 use std::thread;
 use std::sync::{Mutex, mpsc, RwLock, Arc};
@@ -81,7 +81,34 @@ impl Node{
                 Err(TryRecvError::Disconnected) => return,
                 Ok(message) => {
                     match message {
-                        NodeMessage::BlockNew(block) => {
+                        NodeMessage::BlockNew(block_info) => {
+
+                            let mut blockchain = block_chain.read().expect("BlockChain Lock is poisoned");
+                            if !blockchain.is_known_block(&block_info.block_hash){
+                                info!("[RECEIVED INFO ABOUT NEW BLOCK - {} - REQUESTING BLOCK]", block_info.block_hash);
+                                let message_to_send = NetworkMessageType::RequestBlock(RequestBlockMessage::new(self.config.node_id,block_info.block_id, block_info.block_hash));
+                                //Request block from node that sended BlockNew message
+                                network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(block_info.from,message_to_send)));
+                            }
+                        }
+                        NodeMessage::RaftMessage(raft_message) => {
+                            if self.raft_engine_client.is_some(){
+                                self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::RaftMessage(raft_message));
+                            }
+                        },
+                        NodeMessage::RequestBlock(block_request) => {
+
+                            let blockchain = block_chain.read().expect("BlockChain Lock is poisoned");
+                            if let Some(block) = blockchain.find_block(block_request.block_id, block_request.block_hash) {
+                                info!("[RECEIVED BLOCKREQUEST FROM {} - HAVE REQUESTED BLOCK] Sending RequestBlockMessageResponse {:?}",block_request.requester_id, block);
+                                let message_to_send = NetworkMessageType::RequestBlockResponse(block);
+                                network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(block_request.requester_id, message_to_send)));
+
+                            }else{
+                                debug!("[DONT HAVE REQUESTED BLOCK]");
+                            }
+                        },
+                        NodeMessage::RequestBlockResponse(block) => {
                             let block_hash = block.hash();
                             let mut blockchain = block_chain.write().expect("BlockChain Lock is poisoned");
 
@@ -91,31 +118,14 @@ impl Node{
                                     blockchain.add_to_uncommitted_block_que( block.clone());
                                     //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
                                     if self.raft_engine_client.is_some(){
-                                        self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::BlockNew(block));
+                                        self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::BlockNew(block.clone()));
                                     }
+
+                                    let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.config.node_id,block.header.block_id, block.hash()));
+                                    network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
                                 }
                             }
                         },
-                        NodeMessage::RaftMessage(raft_message) => {
-
-
-
-                            if self.raft_engine_client.is_some(){
-                                self.raft_engine_client.as_ref().unwrap().send(RaftNodeMessage::RaftMessage(raft_message));
-                            }
-                        },
-                        NodeMessage::RequestBlock(block_request) => {
-
-                            let blockchain = block_chain.read().expect("BlockChain Lock is poisoned");
-                            if let Some(block) = blockchain.find_block(block_request.block_id, block_request.block_hash) {
-                                info!("[HAVE REQUESTED BLOCK] Sending RequestBlockMessageResponse {:?}",block);
-                                let message_to_send = NetworkMessageType::RequestBlockResponse(block);
-                                network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(block_request.requester_id, message_to_send)));
-
-                            }else{
-                                info!("[DONT HAVE REQUESTED BLOCK]");
-                            }
-                        }
                         _ => warn!("Unhandled update: {:?}", message),
                     }
                     //debug!("Update: {:?}", update);
@@ -139,9 +149,10 @@ impl Node{
 
 #[derive(Debug,Serialize, Deserialize)]
 pub enum NodeMessage {
-    BlockNew(Block),
+    BlockNew(NewBlockInfo),
     RaftMessage(RaftMessage),
     RequestBlock(RequestBlockMessage),
+    RequestBlockResponse(Block),
 }
 
 fn add_new_raft_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {

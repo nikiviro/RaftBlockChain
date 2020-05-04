@@ -63,12 +63,12 @@ impl Blockchain {
     }
 
     pub fn remove_from_uncommitted_block_que(&mut self, block_hash: &String) -> Option<Block> {
-        info!("Removed from uncommited block que - {}", block_hash);
+        debug!("Removed from uncommited block que - {}", block_hash);
         self.uncommited_block_queue.remove(block_hash)
     }
 
     pub fn add_to_uncommitted_block_que(&mut self, block: Block) -> Option<Block> {
-        info!("Added to uncommited block que - {}", block.hash());
+        debug!("Added to uncommited block que - {}", block.hash());
         self.uncommited_block_queue.insert(block.hash(), block)
     }
 }

@@ -147,7 +147,7 @@ fn handle_received_message(received_message: NetworkMessage, node_client: Sender
             node_client.send(NodeMessage::RequestBlock(block_request));
         },
         NetworkMessageType::RequestBlockResponse(block) => {
-            node_client.send(NodeMessage::BlockNew(block));
+            node_client.send(NodeMessage::RequestBlockResponse(block));
         }
         _ => warn!("Unhandled network message received: {:?}", received_message),
     }
@@ -189,7 +189,7 @@ impl BroadCastRequest{
 
 #[derive(Debug,Serialize, Deserialize, Clone)]
 pub enum NetworkMessageType {
-    BlockNew(Block),
+    BlockNew(NewBlockInfo),
     RaftMessage(RaftMessage),
     RequestBlock(RequestBlockMessage),
     RequestBlockResponse(Block)
@@ -243,6 +243,23 @@ impl RequestBlockMessage{
     pub fn new(requester_id: u64, block_id: u64, block_hash: String) -> Self {
         RequestBlockMessage{
             requester_id,
+            block_id,
+            block_hash
+        }
+    }
+}
+
+#[derive(Debug,Serialize, Deserialize, Clone)]
+pub struct NewBlockInfo{
+    pub from: u64,
+    pub block_id: u64,
+    pub block_hash: String,
+}
+
+impl NewBlockInfo{
+    pub fn new(from: u64, block_id: u64, block_hash: String) -> Self {
+        NewBlockInfo{
+            from,
             block_id,
             block_hash
         }

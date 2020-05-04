@@ -7,7 +7,7 @@ use raft::RawNode;
 use raft::{prelude::*, StateRole};
 use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::collections::VecDeque;
-use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, BroadCastRequest, NetworkMessageType};
+use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, BroadCastRequest, NetworkMessageType, NewBlockInfo};
 use crate::blockchain::block::{BlockType, ConfiglBlockBody};
 use crate::Blockchain;
 
@@ -108,9 +108,9 @@ impl RaftEngine {
                         new_block_id = 1;
                         new_block = Block::genesis(genesis_config.clone(), self.config.node_id, &self.config.key_pair)
                     }
-                    println!("| ---------------------- |");
-                    println!("| Created new block - {} {}|",new_block_id, new_block.hash());
-                    println!("| ---------------------- |");
+                    info!("| ---------------------- |");
+                    info!("| Created new block - {} {}|",new_block_id, new_block.hash());
+                    info!("| ---------------------- |");
                     //Add block to uncommitted block que
                     block_chain.write().expect("BlockChain Lock is poisoned").add_to_uncommitted_block_que(new_block.clone());
 
@@ -119,7 +119,7 @@ impl RaftEngine {
                     let (proposal, rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
 
-                    let message_to_send = NetworkMessageType::BlockNew(new_block);
+                    let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.config.node_id,new_block.header.block_id, new_block.hash()));
                     self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
 
                     new_block_timer = Instant::now();
