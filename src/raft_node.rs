@@ -257,7 +257,7 @@ impl RaftNode {
 
                                         if block_chain.block_extends_chain_head(&block){
                                             block_chain.add_block(block.clone());
-                                            info!("[BLOCK COMMITTED - {}] Leader added new block: {:?}", block.hash(), block);
+                                            info!("[BLOCK COMMITTED - ID:{} HASH:{}]", block.header.block_id, block.hash());
 
                                             let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.id, block.header.block_id, block.hash()));
                                             self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
@@ -290,7 +290,7 @@ impl RaftNode {
                                     if block.header.proposer == self.current_leader{
                                         if block_chain.block_extends_chain_head(&block){
                                             block_chain.add_block(block.clone());
-                                            info!("[BLOCK COMMITTED - {}] Follower added new block: {:?}", block.hash(), block);
+                                            info!("[BLOCK COMMITTED - ID:{} HASH:{}]", block.header.block_id, block.hash());
                                             info!("[CURRENT LEADER ID - {}] ", self.current_leader);
                                             let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.id,block.header.block_id, block.hash()));
                                             self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));

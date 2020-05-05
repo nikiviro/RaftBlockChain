@@ -85,7 +85,7 @@ impl Node{
 
                             let mut blockchain = block_chain.read().expect("BlockChain Lock is poisoned");
                             if !blockchain.is_known_block(&block_info.block_hash){
-                                info!("[RECEIVED INFO ABOUT NEW BLOCK - {} - REQUESTING BLOCK]", block_info.block_hash);
+                                info!("[RECEIVED INFO ABOUT NEW BLOCK ID:{} HASH:{} - REQUESTING BLOCK]", block_info.block_id, block_info.block_hash);
                                 let message_to_send = NetworkMessageType::RequestBlock(RequestBlockMessage::new(self.config.node_id,block_info.block_id, block_info.block_hash));
                                 //Request block from node that sended BlockNew message
                                 network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(block_info.from,message_to_send)));
@@ -113,7 +113,7 @@ impl Node{
                             let mut blockchain = block_chain.write().expect("BlockChain Lock is poisoned");
 
                             if !blockchain.is_known_block(&block_hash){
-                                info!("[RECEIVED BLOCK - {}] Received new block {:?}", block.hash(), block);
+                                info!("[RECEIVED BLOCK - ID:{} HASH:{}]", block.header.block_id,block.hash());
                                 if block.is_valid(&self.config.electors){
                                     blockchain.add_to_uncommitted_block_que( block.clone());
                                     //self.blockchain.write().expect("Blockchain is poisoned").add_block(block);
