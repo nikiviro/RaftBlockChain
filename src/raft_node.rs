@@ -17,6 +17,7 @@ use protobuf::reflect::ProtobufValue;
 use rand::prelude::*;
 use crate::blockchain::block::{BlockType, ConfiglBlockBody, BlockBody};
 use std::time::Instant;
+use crate::raft_engine::RAFT_TICK_TIMEOUT;
 
 pub struct RaftNode {
     // None if the raft is not initialized.
@@ -48,11 +49,15 @@ impl RaftNode {
     ) -> Self {
         //TODO: Load configuration from genesis/configuration block
         let mut rng = rand::thread_rng();
-        let election_tick = rng.gen_range(300, 1000);
+        let x = RAFT_TICK_TIMEOUT;
+        let min_election_timeouts_ticks = genesis_config.min_election_timeout / RAFT_TICK_TIMEOUT.as_millis() as u64;
+        let max_election_timeouts_ticks = genesis_config.max_election_timeout / RAFT_TICK_TIMEOUT.as_millis() as u64;
+        let heartbeat_frequency_ticks = genesis_config.heartbeat_frequency / RAFT_TICK_TIMEOUT.as_millis() as u64;
+        let election_tick = rng.gen_range(min_election_timeouts_ticks, max_election_timeouts_ticks);
         println!("Election tick:{}",election_tick);
         let mut cfg = Config {
-            election_tick: election_tick,
-            heartbeat_tick: 30,
+            election_tick: election_tick as usize,
+            heartbeat_tick: heartbeat_frequency_ticks as usize,
             id: id,
             tag: format!("raft_node{}", id),
             pre_vote: true,
@@ -165,6 +170,10 @@ impl RaftNode {
         // Get the `Ready` with `RawNode::ready` interface.
         let mut ready = raw_node.ready();
 
+        if self.current_leader != raw_node.raft.leader_id{
+            info!("[LEADER CHANGED {} - {}]", self.current_leader,raw_node.raft.leader_id);
+            self.current_leader = raw_node.raft.leader_id;
+        }
         self.current_leader = raw_node.raft.leader_id;
 
         let is_leader = raw_node.raft.state == StateRole::Leader;

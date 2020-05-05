@@ -3,8 +3,11 @@
     "4001":"SoEXXLPenWPOO/TMAi13rIzhy3JVxyxunPDhZTm/EOE=",
     "4002":"QOaGRnN0I9nypBQHTdhc2zz4+wuzWTHxuC1/iqIhx5k=",
     "4003":"4+vov/gxnaBs2OUIXK7K1FVrc+NZyBYliocJZJvUscs=",
-    "4004":"2xbDh95/29pp7elzdwyucUiz9G8PXnVhrQ9cc1vC0GA="
+    "4004":"2xbDh95/29pp7elzdwyucUiz9G8PXnVhrQ9cc1vC0GA=",
+    "4007":"O+k1KXr9TBtzwm5NYTiiJEFYh6JrFyeQviwhCVVXI5I="
   },
-  "current_leader_id":"0",
-  "pace_of_block_creation": "1500"
+  "pace_of_block_creation": "5000",
+  "heartbeat_frequency": "1500",
+  "min_election_timeout": "15000",
+  "max_election_timeout": "50000"
 }

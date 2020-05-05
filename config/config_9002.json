@@ -1,8 +1,0 @@
-{
-  "node_id": "9002",
-  "public_key": "doRqKAD2d20Jvvf+PxaBsYs7oDZNaaH1GPDOROF0OiE=",
-  "private_key": "F5qrJssxe/FtleBCdIwtwLt3rP9Zaggef+753vH6ElI=",
-  "nodes_to_connect":{
-    "9001":"127.0.0.1"
-  }
-}

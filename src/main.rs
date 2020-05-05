@@ -106,7 +106,8 @@ fn main() {
     let genesis_file_name = matches.value_of("genesis").unwrap().to_string();
     println!("Genesis file: {}", genesis_file_name);
 
-    let (config, genesis_config) = load_config(config_file_name, genesis_file_name);
+    let (config, genesis_config) = load_config(config_file_name,
+                                               genesis_file_name);
 
     let config = Arc::new(config);
     let mut node = Node::new( config);
@@ -129,9 +130,15 @@ pub fn load_config(config_file_name: String, genesis_file_name: String) -> (Node
         list_of_elector_nodes.insert(node_id,node_public_key);
     }
 
-    let genesis = ConfiglBlockBody::new(list_of_elector_nodes,genesis_json.pace_of_block_creation);
+    let genesis = ConfiglBlockBody::new(list_of_elector_nodes,
+                                        genesis_json.pace_of_block_creation,
+                                        genesis_json.heartbeat_frequency,
+                                        genesis_json.min_election_timeout,
+                                        genesis_json.max_election_timeout);
 
-    let config = NodeConfig::new_from_config_json(config_json, genesis.list_of_elector_nodes.clone(), genesis.pace_of_block_creation);
+    let config = NodeConfig::new_from_config_json(config_json,
+                                                  genesis.list_of_elector_nodes.clone(),
+                                                  genesis.pace_of_block_creation);
 
     (config, genesis)
 }
@@ -215,4 +222,7 @@ pub struct
 GenesisConfigStructJson {
     pub list_of_elector_nodes: HashMap<String, String>,
     pub pace_of_block_creation: u64,
+    pub heartbeat_frequency: u64,
+    pub min_election_timeout: u64,
+    pub max_election_timeout: u64
 }

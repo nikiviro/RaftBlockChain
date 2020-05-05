@@ -150,13 +150,20 @@ impl Default for NormalBlockBody {
 pub struct ConfiglBlockBody{
     pub list_of_elector_nodes: BTreeMap<u64, PublicKey>,
     pub pace_of_block_creation: u64,
+    pub heartbeat_frequency: u64,
+    pub min_election_timeout: u64,
+    pub max_election_timeout: u64
 }
 
 impl ConfiglBlockBody{
-    pub fn new(list_of_elector_nodes: BTreeMap<u64, PublicKey>, pace_of_block_creation: u64) -> Self {
+    pub fn new(list_of_elector_nodes: BTreeMap<u64, PublicKey>, pace_of_block_creation: u64,
+               heartbeat_frequency: u64, min_election_timeout: u64, max_election_timeout: u64) -> Self {
         ConfiglBlockBody{
             list_of_elector_nodes,
-            pace_of_block_creation
+            pace_of_block_creation,
+            heartbeat_frequency,
+            min_election_timeout,
+            max_election_timeout
         }
     }
 }
@@ -166,7 +173,10 @@ impl Default for ConfiglBlockBody {
         let electors: BTreeMap<u64, PublicKey>  = BTreeMap::new();
         ConfiglBlockBody{
             list_of_elector_nodes:  electors,
-            pace_of_block_creation: 10000
+            pace_of_block_creation: 10000,
+            heartbeat_frequency: 1500,
+            min_election_timeout: 15000,
+            max_election_timeout: 50000
         }
     }
 }
