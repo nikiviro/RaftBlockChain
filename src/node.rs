@@ -100,7 +100,7 @@ impl Node{
 
                             let blockchain = block_chain.read().expect("BlockChain Lock is poisoned");
                             if let Some(block) = blockchain.find_block(block_request.block_id, block_request.block_hash) {
-                                info!("[RECEIVED BLOCKREQUEST FROM {} - HAVE REQUESTED BLOCK] Sending RequestBlockMessageResponse {:?}",block_request.requester_id, block);
+                                debug!("[RECEIVED BLOCKREQUEST FROM {} - HAVE REQUESTED BLOCK] Sending RequestBlockMessageResponse {:?}",block_request.requester_id, block);
                                 let message_to_send = NetworkMessageType::RequestBlockResponse(block);
                                 network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(block_request.requester_id, message_to_send)));
 
