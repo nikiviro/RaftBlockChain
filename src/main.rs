@@ -68,6 +68,7 @@ fn main() {
             .help("Sets a config file name")
             .takes_value(true)
             .required_unless("generate_keypair")
+            .default_value("config/config.json")
             .required(true))
         .arg(Arg::with_name("genesis")
             .short("g")
@@ -75,6 +76,7 @@ fn main() {
             .value_name("FILE")
             .help("Sets a genesis file name")
             .takes_value(true)
+            .default_value("config/genesis.json")
             .required_unless("generate_keypair")
             .required(true))
         .arg(Arg::with_name("generate_keypair")
@@ -145,10 +147,9 @@ pub fn load_config(config_file_name: String, genesis_file_name: String) -> (Node
 
 pub fn load_config_from_file(file_name: String) -> ConfigStructJson {
 
-    let config_dir = "config/".to_string();
     let mut config = ConfigLoader::default();
     config
-        .merge(File::with_name(&format!("{}{}",config_dir,file_name))).unwrap();
+        .merge(File::with_name(&format!("{}",file_name))).unwrap();
     // Print out our settings (as a HashMap)
     let configstruct =  config.try_into::<ConfigStructJson>().unwrap();
     println!("\n{:?} \n\n-----------",
@@ -159,10 +160,9 @@ pub fn load_config_from_file(file_name: String) -> ConfigStructJson {
 
 pub fn load_genesis_config(file_name: String) -> GenesisConfigStructJson{
 
-    let config_dir = "config/".to_string();
     let mut config = ConfigLoader::default();
     config
-        .merge(File::with_name(&format!("{}{}",config_dir,file_name))).unwrap();
+        .merge(File::with_name(&format!("{}",file_name))).unwrap();
     // Print out our settings (as a HashMap)
     let genesis_config =  config.try_into::<GenesisConfigStructJson>().unwrap();
     println!("\n{:?} \n\n-----------",
