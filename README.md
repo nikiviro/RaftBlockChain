@@ -1,33 +1,53 @@
 # RaftBlockChain
-The following is example of simple blockchain network using Raft consensus algorithm 
-### Architecture
-There are two types of nodes - leader and fllowers. In this implementation every nodes running in its own thread and use rust channels to communicate with each other. 
-Every node is running RAFT consensus protocol and has its own copy of BlockChain. Ininitialy the first created node will become a Raft leader. 
-There is a global proposals queue where all the request are pushed. 
+The following is implementation of a blockchain network prototype, which focuses on solving problems of communication between network nodes, reaching consensus and distribution of blocks between nodes. The prototype is implemented in the Rust programming language. In the created prototype, individual nodes can play different roles. Among all nodes in the network, a leader is elected. The leader is the only network participant that can create a new block. By delegating operations such as creation of new blocks or leader election only to certain network nodes, we have achieved more effective communication between nodes and nodes are able to reach consensus faster. The consensus protocol used is based on the Raft consensus protocol
 
-There are two types of proposal:
-* Configuration change proposal - changes in the raft cluster (Add new node, remove node)
-* Normal - block insertion - request to insert new block into the Blockchain 
+## Build
 
-Leader is responsible for chceking the global proposals queue for new requests and process them. 
+Clone the repo
 
-In case of block insertion proposal, the leader insert the new block data into the raft log and try to replicate this log amongst all followers. After majority of nodes confirm replication of log entry, the entry is considered as commited. When the entry is commited, all nodes extracts new block data from raft log and insert the block into their local Blockchain. 
-
-### How to use
-
-Clone the repo and build it to start.
-
-```bash
-Cargo run 'num_of_nodes'
+```sh
+git clone https://github.com/nikiviro/RaftBlockChain.git
+cd RaftBlockChain/
 ```
 
-Set enviroment variable to show debug information such as leader change, heartbeat messages, request vote messages, new election..
+Build in release mode
 
-Example: 
-
-```bash
-$ RUST_LOG=info cargo run 10
+```sh
+cargo build --release
 ```
 
-This will create 10 nodes and each node will be running in its own thread. The first created node will become a Raft leader.
-In this example a new block is created every 20 seconds. New blocks are then replicated to all nodes and are inserted into blockchain. After 3. block insertion the leader will stop sending heartbeats messages to followers and new election  will be held. 
+This will produce an executable in the `./target/release` directory.
+
+## Setup
+
+### Using Docker
+
+RaftBlockChain supports the use of Docker to provide an easy installation process by providing a single package that gives the user everything he
+needs to get node up and running. In order to get the installation package, run the following command after installing Docker:
+
+```sh
+docker build -t blockchain_docker_image .
+```    
+
+Before the first start of the node it is necessary to:
+- generate the public and private key of the node which must be inserted into the configuration file, see Generation of private and public key
+- create config files - config.json and genesis.json, you can see example config files in the config/ folder 
+
+The Docker container is set up to use files with these names (config.json, genesis.json) by default when running the blockchain node. 
+These files need to be modified based on the required network configuration.
+
+If you want to run the blockchain node, run the following command:
+```sh
+docker run -p 4001:4001 -v <path to folder with config files>:/config blockchain_docker_image
+```
+
+This should result in RaftBlockChain node running.
+
+#### Generation of public and private key
+
+To generate public and private key run: 
+
+```sh
+docker run blockchain_docker_image --generate_keypair
+```  
+The generated private and public key is written to the console. The private and public keys must be entered in the configuration file (config/config.json).
