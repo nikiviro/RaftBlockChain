@@ -1,11 +1,11 @@
 use std::collections::{HashMap, BTreeMap};
 
 use crate::p2p::peer::Peer;
-use zmq::{Context, Sendable};
+use zmq::{Context};
 use std::thread;
-use crate::{Update, Block, RaftMessage, ConfigStructJson, NodeConfig};
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
-use std::sync::{RwLock, Arc};
+use crate::{Block, RaftMessage, NodeConfig};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
+use std::sync::{Arc};
 use crate::node::NodeMessage;
 use ed25519_dalek::{Keypair, Signature, PublicKey};
 
@@ -71,7 +71,7 @@ impl NetworkManager {
         //Received message will be forwarded through the channel to main thread
         let node_sender = self.node_client.clone();
         let elector_list = self.config.electors.clone();
-        let receiver_thread_handle = thread::spawn( move ||
+        let _receiver_thread_handle = thread::spawn( move ||
             loop {
                 let msq = router_socket.recv_multipart(0).unwrap();
                 //println!("Received {:?}", msg);
@@ -100,7 +100,7 @@ impl NetworkManager {
         for (id, peer) in self.peers.iter() {
             let network_message = NetworkMessage::new(self.config.node_id,id.clone(),request.data.clone(), &self.config.key_pair);
             let data = network_message.serialize();
-            peer.socket.send(data.clone(),0);
+            peer.socket.send(data.clone(),0).expect("Could not send meessage to peer");
         }
     }
 
@@ -118,7 +118,7 @@ fn handle_received_message(received_message: NetworkMessage, node_client: Sender
 
     match received_message.message_type {
         NetworkMessageType::BlockNew(block) => {
-            node_client.send(NodeMessage::BlockNew(block));
+            node_client.send(NodeMessage::BlockNew(block)).unwrap();
         },
         NetworkMessageType::RaftMessage(ref raft_message) => {
             //Verify raft node signature
@@ -140,14 +140,14 @@ fn handle_received_message(received_message: NetworkMessage, node_client: Sender
                     return;
                 }
             }
-            node_client.send(NodeMessage::RaftMessage(raft_message.clone()));
+            node_client.send(NodeMessage::RaftMessage(raft_message.clone())).unwrap();
         },
         NetworkMessageType::RequestBlock( block_request) => {
             debug!("[BLOCK REQUEST MESSAGE] - Received block request message: {:?}", block_request);
-            node_client.send(NodeMessage::RequestBlock(block_request));
+            node_client.send(NodeMessage::RequestBlock(block_request)).unwrap();
         },
         NetworkMessageType::RequestBlockResponse(block) => {
-            node_client.send(NodeMessage::RequestBlockResponse(block));
+            node_client.send(NodeMessage::RequestBlockResponse(block)).unwrap();
         }
         _ => warn!("Unhandled network message received: {:?}", received_message),
     }

@@ -1,13 +1,11 @@
 use std::sync::mpsc::{Receiver, TryRecvError, Sender};
-use crate::{Update, RaftNode, Proposal, Block, RaftMessage, LeaderState, NodeConfig};
+use crate::{RaftNode, Proposal, Block, RaftMessage, LeaderState, NodeConfig};
 use std::thread;
 use std::time::{Duration, Instant};
-use raft::storage::MemStorage;
-use raft::RawNode;
-use raft::{prelude::*, StateRole};
-use std::sync::{Arc, Mutex, RwLock, mpsc};
+use raft::{StateRole};
+use std::sync::{Arc, RwLock, mpsc};
 use std::collections::VecDeque;
-use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, BroadCastRequest, NetworkMessageType, NewBlockInfo};
+use crate::p2p::network_manager::{NetworkManagerMessage, BroadCastRequest, NetworkMessageType, NewBlockInfo};
 use crate::blockchain::block::{BlockType, ConfiglBlockBody};
 use crate::Blockchain;
 
@@ -43,11 +41,10 @@ impl RaftEngine {
 
     pub fn start(
         &mut self,
-        mut block_chain: Arc<RwLock<Blockchain>>,
+        block_chain: Arc<RwLock<Blockchain>>,
         genesis_config: ConfiglBlockBody
     ){
         let mut raft_tick_timer = Instant::now();
-        let mut leader_stop_timer = Instant::now();
         let mut new_block_timer = Instant::now();
 
         let mut raft_node = RaftNode::new(
@@ -96,7 +93,7 @@ impl RaftEngine {
                 if new_block_timer.elapsed() >= Duration::from_millis(self.config.pace_of_block_creation)
                     && match raft_node.leader_state { Some(LeaderState::Proposing) => false, _ => true }
                 {
-                    let mut new_block_id;
+                    let new_block_id;
                     let new_block;
                     if let Some(last_block) = block_chain.read().expect("BlockChain Lock is poisoned").get_chain_head() {
                         new_block_id = last_block.header.block_id + 1;
@@ -116,11 +113,11 @@ impl RaftEngine {
 
                     //Update leader state - leader is proposing block
                     raft_node.leader_state = Some(LeaderState::Proposing);
-                    let (proposal, rx) = Proposal::new_block(new_block.clone());
+                    let (proposal, _rx) = Proposal::new_block(new_block.clone());
                     self.proposals_global.push_back(proposal);
 
                     let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.config.node_id,new_block.header.block_id, new_block.hash()));
-                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                    self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send))).unwrap();
 
                     new_block_timer = Instant::now();
                 }
@@ -159,34 +156,12 @@ impl RaftEngine {
         }
         true
     }
-
-    pub fn propose_to_raft( &mut self, ){
-
-    }
 }
 
 #[derive(Debug)]
 pub enum RaftNodeMessage{
     RaftMessage(RaftMessage),
-    RaftProposal(Proposal),
     BlockNew(Block),
-}
-
-
-//TODO: Remmove, not used after downgrade to raft 0.5.0
-fn add_new_node(proposals: &Mutex<VecDeque<Proposal>>, node_id: u64) {
-    let mut conf_change = ConfChange::default();
-    conf_change.set_node_id(node_id);
-    conf_change.set_change_type(ConfChangeType::AddNode);
-    let (proposal, rx) = Proposal::conf_change(&conf_change);
-    proposals.lock().unwrap().push_back(proposal);
-    if rx.recv().unwrap() {
-        println!("Node {:?} succesfully added to cluster", node_id);
-    }
-}
-
-pub fn propose(raft_node: &mut RaftNode, update: RaftNodeMessage){
-
 }
 
 

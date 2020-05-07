@@ -11,39 +11,21 @@ extern crate base64;
 extern crate clap;
 
 
-use std::thread;
-use std::collections::{HashMap, VecDeque, BTreeMap};
-use std::env;
-use std::process::exit;
-use std::sync::{Arc, Mutex, RwLock};
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
-use std::time::{Duration, Instant};
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use std::collections::{HashMap, BTreeMap};
+use std::sync::{Arc};
 use config::{Config as ConfigLoader, File};
-use protobuf::{self, Message as ProtobufMessage};
-use raft::{prelude::*, StateRole};
-use zmq::Socket;
-
 use rand::rngs::OsRng;
 use ed25519_dalek::{Keypair, PUBLIC_KEY_LENGTH, PublicKey, SecretKey};
-use ed25519_dalek::Signature;
-use base64::{encode, decode};
-use bincode::{serialize};
-use clap::{Arg, App, SubCommand};
+use clap::{Arg, App};
 
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 pub use crate::raft_node::*;
 pub use crate::raft_node::RaftNode;
 pub use crate::proposal::Proposal;
-use crate::p2p::network_manager::NetworkManager;
-use crate::raft_engine::RaftEngine;
 use crate::node::Node;
 use crate::blockchain::block::ConfiglBlockBody;
 use std::str::FromStr;
-use std::rc::Rc;
-
 
 mod blockchain;
 mod raft_node;

@@ -2,9 +2,8 @@ use std::fmt::{self, Debug, Formatter};
 use std::time::SystemTime;
 use crypto::sha2::Sha256;
 use crypto::digest::Digest;
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{BTreeMap};
 use ed25519_dalek::{PublicKey, Signature, Keypair};
-use crate::Blockchain;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Block {

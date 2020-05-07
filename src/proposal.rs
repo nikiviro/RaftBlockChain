@@ -1,6 +1,6 @@
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
+use std::sync::mpsc::{self, Receiver, SyncSender};
 
-use raft::{prelude::*, StateRole};
+use raft::{prelude::*};
 
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;

@@ -1,8 +1,6 @@
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex, RwLock};
-use std::sync::mpsc::{self, Receiver, Sender, SyncSender, TryRecvError};
+use std::sync::{Arc, RwLock};
+use std::sync::mpsc::{Sender};
 
-use prost::Message as ProstMsg;
 use protobuf::{self, Message as ProtobufMessage};
 use raft::{prelude::*, StateRole};
 use raft::eraftpb::ConfState;
@@ -11,11 +9,9 @@ use raft::storage::MemStorage;
 pub use crate::blockchain::*;
 pub use crate::blockchain::block::Block;
 use crate::proposal::Proposal;
-use crate::p2p::network_manager::{NetworkManager, NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType, RequestBlockMessage, NewBlockInfo};
-use crate::NodeConfig;
-use protobuf::reflect::ProtobufValue;
+use crate::p2p::network_manager::{NetworkManagerMessage, SendToRequest, BroadCastRequest, NetworkMessageType, RequestBlockMessage, NewBlockInfo};
 use rand::prelude::*;
-use crate::blockchain::block::{BlockType, ConfiglBlockBody, BlockBody};
+use crate::blockchain::block::{ConfiglBlockBody};
 use std::time::Instant;
 use crate::raft_engine::RAFT_TICK_TIMEOUT;
 
@@ -47,15 +43,13 @@ impl RaftNode {
         genesis_config: ConfiglBlockBody,
         block_chain: Arc<RwLock<Blockchain>>,
     ) -> Self {
-        //TODO: Load configuration from genesis/configuration block
         let mut rng = rand::thread_rng();
-        let x = RAFT_TICK_TIMEOUT;
         let min_election_timeouts_ticks = genesis_config.min_election_timeout / RAFT_TICK_TIMEOUT.as_millis() as u64;
         let max_election_timeouts_ticks = genesis_config.max_election_timeout / RAFT_TICK_TIMEOUT.as_millis() as u64;
         let heartbeat_frequency_ticks = genesis_config.heartbeat_frequency / RAFT_TICK_TIMEOUT.as_millis() as u64;
         let election_tick = rng.gen_range(min_election_timeouts_ticks, max_election_timeouts_ticks);
         println!("Election tick:{}",election_tick);
-        let mut cfg = Config {
+        let cfg = Config {
             election_tick: election_tick as usize,
             heartbeat_tick: heartbeat_frequency_ticks as usize,
             id: id,
@@ -67,7 +61,7 @@ impl RaftNode {
 
         let mut raft_peers: Vec<Peer> = vec![];
         //Add all electors from genesis file to raft_peers
-        for (key, value) in genesis_config.list_of_elector_nodes {
+        for (key, _value) in genesis_config.list_of_elector_nodes {
             raft_peers.push(
                 Peer{
                     id: key,
@@ -90,7 +84,7 @@ impl RaftNode {
 
     // Step a raft message, initialize the raft if need.
     pub fn step(&mut self, msg: Message) {
-        if (msg.msg_type != MessageType::MsgHeartbeat && msg.msg_type != MessageType::MsgHeartbeatResponse){
+        if msg.msg_type != MessageType::MsgHeartbeat && msg.msg_type != MessageType::MsgHeartbeatResponse{
             debug!("Received raft message - type: {:?}, from:{:?}, commit:{:?}, entries:{:?}", msg.msg_type, msg.from, msg.commit, msg.entries);
         }
         if self.raw_node.is_none() {
@@ -104,12 +98,11 @@ impl RaftNode {
         let _ = raft.step(msg);
     }
 
-    //TODO: Remmove, not used after downgrade to raft 0.5.0
     pub fn initialize_raft_from_message(&mut self, msg: &Message) {
         if !is_initial_msg(msg) {
             return;
         }
-        let mut cfg = Config {
+        let cfg = Config {
             election_tick: 100,
             heartbeat_tick: 3,
             id: msg.get_to(),
@@ -134,7 +127,6 @@ impl RaftNode {
 
         let last_index1 = raw_node.raft.raft_log.last_index() + 1;
         if let Some( ref block) = proposal.block {
-            //TODO: Add block_hash field to Block struct, so we will dont need to hash block each time we need hash.
             let raft_log_entry: RaftLogEntry = RaftLogEntry::new(block.header.block_id, block.hash());
             //convert Block struct to bytes
             let data = bincode::serialize(&raft_log_entry).unwrap();
@@ -209,7 +201,7 @@ impl RaftNode {
             debug!("Sending message:{:?}", msg);
             let to = msg.get_to();
             let message_to_send = NetworkMessageType::RaftMessage(RaftMessage::new(msg));
-            self.network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(to, message_to_send)));
+            self.network_manager_sender.send(NetworkManagerMessage::SendToRequest(SendToRequest::new(to, message_to_send))).unwrap();
         }
 
         let mut block_chain = self.blockchain.write().expect("BlockChain Lock is poisoned");
@@ -222,14 +214,13 @@ impl RaftNode {
                     continue;
                 }
                 if let EntryType::EntryConfChange = entry.get_entry_type() {
-                    //TODO: Make sure that there is only on conf change proposal at time
                     // Handle conf change messages
                     let mut cc = ConfChange::default();
                     cc.merge_from_bytes(&entry.data).unwrap();
                     let node_id = cc.get_node_id();
                     match cc.get_change_type() {
                         ConfChangeType::AddNode => {
-                            if (entry.get_term() != 1){
+                            if entry.get_term() != 1{
                                 raw_node.raft.add_node(node_id).unwrap();
                             }
                         },
@@ -260,7 +251,7 @@ impl RaftNode {
                                             info!("[BLOCK COMMITTED - ID:{} HASH:{}]", block.header.block_id, block.hash());
 
                                             let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.id, block.header.block_id, block.hash()));
-                                            self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                                            self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send))).unwrap();
 
                                             self.leader_state = Some(LeaderState::Building(Instant::now()));
                                         }
@@ -293,7 +284,7 @@ impl RaftNode {
                                             info!("[BLOCK COMMITTED - ID:{} HASH:{}]", block.header.block_id, block.hash());
                                             info!("[CURRENT LEADER ID - {}] ", self.current_leader);
                                             let message_to_send = NetworkMessageType::BlockNew(NewBlockInfo::new(self.id,block.header.block_id, block.hash()));
-                                            self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                                            self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send))).unwrap();
                                         }
                                         else{
                                             panic!("Committed block does not extend current chain head");
@@ -392,14 +383,14 @@ impl RaftNode {
             _ => {
                 //Request block from other peers
                 let message_to_send = NetworkMessageType::RequestBlock(RequestBlockMessage::new(self.id,raft_log_entry.block_id, raft_log_entry.block_hash));
-                self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send)));
+                self.network_manager_sender.send(NetworkManagerMessage::BroadCastRequest(BroadCastRequest::new(message_to_send))).unwrap();
                 info!("[DONT HAVE BLOCK] - Raft block append denied");
                 false
             }
         }
     }
 
-    pub fn on_block_new(&mut self, block: Block) {
+    pub fn on_block_new(&mut self, _block: Block) {
     }
 }
 #[derive(Debug,Serialize, Deserialize)]
@@ -440,7 +431,6 @@ impl RaftLogEntry{
     }
 }
 
-//TODO: Remmove, not used after downgrade to raft 0.5.0
 // The message can be used to initialize a raft node or not.
 fn is_initial_msg(msg: &Message) -> bool {
     let msg_type = msg.get_msg_type();
