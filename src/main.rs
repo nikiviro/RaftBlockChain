@@ -34,6 +34,7 @@ mod p2p;
 mod raft_engine;
 mod node;
 
+pub const NETWORK_PORT: u64 = 4001;
 
 
 fn main() {

@@ -3,7 +3,7 @@ use std::collections::{HashMap, BTreeMap};
 use crate::p2p::peer::Peer;
 use zmq::{Context};
 use std::thread;
-use crate::{Block, RaftMessage, NodeConfig};
+use crate::{Block, RaftMessage, NodeConfig, NETWORK_PORT};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::{Arc};
 use crate::node::NodeMessage;
@@ -43,9 +43,9 @@ impl NetworkManager {
     pub fn start(&mut self) {
 
         for (peer_port, ip_address) in self.config.nodes_to_connect.clone(){
-            self.add_new_peer(ip_address,peer_port);
+            self.add_new_peer(ip_address,NETWORK_PORT);
         }
-        self.listen(self.config.node_id);
+        self.listen(NETWORK_PORT);
 
         loop {
             match self.network_manager_receiver.try_recv() {
